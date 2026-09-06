@@ -24,6 +24,13 @@ use nucula_rig::acr::Acr1252;
 use nucula_rig::atom_console::AtomConsole;
 use nucula_rig::ndef_t2t::{build_ndef_text_image, NDEF_AREA_512};
 
+/// The ACR1252U's Write Card Emulation Data takes a one-byte StartOffset,
+/// capping the addressable emulated image at 256 bytes. A 1-sat cashuB
+/// token (single proof, CBOR+base64) lands around 200 bytes and fits;
+/// anything multi-proof does not. Verify before burning the one CE
+/// entry this reader has per power cycle.
+const CE_IMAGE_LIMIT: usize = 256;
+
 const DEFAULT_ATOM_PORT: &str =
     "/dev/serial/by-id/usb-M5STACK_Inc._M5_Serial_Converter_9D529068B4-if00-port0";
 const DEFAULT_MINT_URL: &str = "http://127.0.0.1:3338";
@@ -42,8 +49,9 @@ fn mint_url() -> String {
 async fn receives_a_real_token_over_the_air_and_redeems_it() {
     let mint = mint_url();
 
-    // Payer: real ecash from the running mint.
-    let token = nucula_rig::payer::mint_token(&mint, 21).await.expect("mint");
+    // Payer: real ecash from the running mint. Single proof, 1 sat —
+    // must fit the emulated tag (see CE_IMAGE_LIMIT).
+    let token = nucula_rig::payer::mint_token(&mint, 1).await.expect("mint");
     assert!(token.starts_with("cashuA") || token.starts_with("cashuB"));
 
     // Atom: add the mint and start an NFC reader session.
@@ -51,12 +59,14 @@ async fn receives_a_real_token_over_the_air_and_redeems_it() {
     let _ = atom.nfc_stop();
     let out = atom.mint_add(&mint).expect("mint add");
     assert!(!out.contains("error"), "mint add failed: {out}");
-    atom.nfc_request(21).expect("nfc request");
+    atom.nfc_request(1).expect("nfc request");
 
     // ACR: preload the token as a Type 2 NDEF tag and start emulating.
     // ONE-WAY per power cycle — keep last so a failing earlier step
     // does not burn the reader.
     let image = build_ndef_text_image(&token, NDEF_AREA_512).expect("image");
+    assert!(image.len() <= CE_IMAGE_LIMIT,
+            "token image {} B exceeds the CE addressable area", image.len());
     let mut acr = Acr1252::open().expect("ACR1252");
     acr.present_ndef_image(&image).expect("CE preload");
 
@@ -78,13 +88,14 @@ async fn stashes_a_token_offline_then_drains_on_reconnect() {
 
     // Precondition (manual): the atom has been online with this mint
     // before, so it holds keysets and accepts offline tokens from it.
-    let token = nucula_rig::payer::mint_token(&mint, 21).await.expect("mint");
+    let token = nucula_rig::payer::mint_token(&mint, 1).await.expect("mint");
 
     let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
     let _ = atom.nfc_stop();
-    atom.nfc_request(21).expect("nfc request");
+    atom.nfc_request(1).expect("nfc request");
 
     let image = build_ndef_text_image(&token, NDEF_AREA_512).expect("image");
+    assert!(image.len() <= CE_IMAGE_LIMIT, "token image too big for CE");
     let mut acr = Acr1252::open().expect("ACR1252");
     acr.present_ndef_image(&image).expect("CE preload");
 
