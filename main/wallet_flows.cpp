@@ -286,18 +286,6 @@ int64_t Wallet::adopt_proofs(std::vector<Proof>& fresh)
     return sum;
 }
 
-// NUT-08: blank change outputs needed to cover any change up to
-// max_change, i.e. ceil(log2(max_change + 1)).
-int blank_output_count(int max_change)
-{
-    int n = 0;
-    while (max_change > 0) {
-        n++;
-        max_change >>= 1;
-    }
-    return n;
-}
-
 // -------------------------------------------------------------------------
 // Swap (NUT-03)
 // -------------------------------------------------------------------------
