@@ -24,3 +24,4 @@ main/wifi_config.h
 sdkconfig.atom
 build-atom/
 rig/target/
+tests/host/build/
