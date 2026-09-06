@@ -68,11 +68,15 @@ pub async fn mint_token(mint_url: &str, amount_sats: u64) -> Result<String, Paye
 
 #[cfg(test)]
 mod tests {
+    fn mint_base() -> String {
+        std::env::var("MINT_URL").unwrap_or_else(|_| "http://127.0.0.1:3338".into())
+    }
+
     #[cfg(feature = "payer")]
     #[tokio::test]
-    #[ignore = "needs micronuts-audit-adapter on 127.0.0.1:3338"]
+    #[ignore = "needs micronuts-audit-adapter (MINT_URL, default 127.0.0.1:3338)"]
     async fn mints_a_token_from_the_running_mint() {
-        let token = crate::payer::mint_token("http://127.0.0.1:3338", 21)
+        let token = crate::payer::mint_token(&mint_base(), 21)
             .await
             .expect("mint flow");
         eprintln!("token ({} bytes): {}", token.len(), &token[..token.len().min(120)]);
@@ -91,7 +95,7 @@ mod tests {
     #[tokio::test]
     #[ignore = "needs micronuts-audit-adapter on 127.0.0.1:3338"]
     async fn one_sat_token_fits_the_emulated_tag_area() {
-        let token = crate::payer::mint_token("http://127.0.0.1:3338", 1)
+        let token = crate::payer::mint_token(&mint_base(), 1)
             .await
             .expect("mint");
         eprintln!("1-sat token: {} bytes", token.len());
