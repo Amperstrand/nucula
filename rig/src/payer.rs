@@ -83,4 +83,19 @@ mod tests {
         );
         assert!(token.len() > 100);
     }
+
+    /// The e2e hands the token to the ACR1252U emulated tag, whose
+    /// addressable image caps at 256 bytes — a 1-sat single-proof
+    /// cashuB token must stay under that.
+    #[cfg(feature = "payer")]
+    #[tokio::test]
+    #[ignore = "needs micronuts-audit-adapter on 127.0.0.1:3338"]
+    async fn one_sat_token_fits_the_emulated_tag_area() {
+        let token = crate::payer::mint_token("http://127.0.0.1:3338", 1)
+            .await
+            .expect("mint");
+        eprintln!("1-sat token: {} bytes", token.len());
+        eprintln!("TOKEN={token}");
+        assert!(token.len() < 512, "unexpectedly large: {}", token.len());
+    }
 }

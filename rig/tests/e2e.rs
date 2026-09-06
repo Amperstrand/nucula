@@ -43,6 +43,19 @@ fn mint_url() -> String {
     std::env::var("MINT_URL").unwrap_or_else(|_| DEFAULT_MINT_URL.into())
 }
 
+/// Rust serial-driver smoke: open the atom console and round-trip a
+/// status command (the python prototypes drove it so far; this
+/// exercises AtomConsole itself).
+#[test]
+#[ignore = "hardware: atom on the serial port"]
+fn atom_console_smoke() {
+    std::thread::sleep(Duration::from_millis(300));
+    let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
+    let status = atom.status().expect("status");
+    eprintln!("{status}");
+    assert!(status.contains("nucula>") || status.contains("nfc:"), "no status output");
+}
+
 #[cfg(feature = "payer")]
 #[tokio::test]
 #[ignore = "hardware: atom + freshly replugged ACR1252U + running micronuts-mint"]
@@ -111,4 +124,38 @@ async fn stashes_a_token_offline_then_drains_on_reconnect() {
         .wait_for_log("drain", Duration::from_secs(120))
         .expect("no drain log");
     eprintln!("{drained}");
+}
+
+/// Diagnostic: which CP210x control-line state lets the console talk?
+/// Tries (dtr, rts) combinations, writing CR LF and reading raw.
+#[test]
+#[ignore = "hardware: atom on the serial port"]
+fn console_line_probe() {
+    use std::io::{Read, Write};
+    let path = atom_port();
+    for (dtr, rts) in [(true, true), (true, false), (false, true), (false, false)] {
+        let mut p = serialport::new(&path, 115_200)
+            .timeout(Duration::from_millis(200))
+            .open()
+            .expect("open");
+        let _ = p.write_data_terminal_ready(dtr);
+        let _ = p.write_request_to_send(rts);
+        std::thread::sleep(Duration::from_millis(300));
+        let _ = p.write_all(b"\r\n");
+        let _ = p.flush();
+        let mut got = Vec::new();
+        let mut buf = [0u8; 256];
+        let end = std::time::Instant::now() + Duration::from_secs(2);
+        while std::time::Instant::now() < end {
+            match p.read(&mut buf) {
+                Ok(n) => got.extend_from_slice(&buf[..n]),
+                Err(e) if e.kind() == std::io::ErrorKind::TimedOut => {}
+                Err(_) => break,
+            }
+        }
+        eprintln!("dtr={dtr} rts={rts} -> {} bytes: {:?}", got.len(),
+                  String::from_utf8_lossy(&got));
+        drop(p);
+        std::thread::sleep(Duration::from_millis(300));
+    }
 }
