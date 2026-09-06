@@ -39,6 +39,28 @@ cargo test  --features live -- --ignored   # live e2e (ACR + atom)
   card emulation does not radiate at all**. `present_ndef_image`
   restores factory settings (`0xFF` / `0x8F`) before entering CE.
 
+### Token size vs. the emulated area (open question)
+
+A 1-sat cashuB token from the local mint — the smallest possible
+hand-off, single proof, DLEQ attached (nucula requires NUT-12) —
+measures **366 chars**; with CC + TLV + record overhead the NDEF image
+is ~380 bytes. The Write Card Emulation Data StartOffset is one byte,
+which conservatively caps the addressable image at 256 bytes. Whether
+offsets ≥ 256 actually wrap, error, or address a larger area is
+**unverified** — probe it over USB *before* entering CE (no power
+cycle burned):
+
+```python
+write_ce_data(240, marker)   # then read_ce_data(240, 16)
+write_ce_data(280, marker)   # byte overflow or accepted?
+```
+
+If the area really caps at 256, Ultralight-CE cannot carry DLEQ
+tokens; the pivots are a relay sticker (ACR writes a real NTAG the
+atom reads) or NDEF Type 4 over ISO-DEP on the RC522 (NTAG424 bolt
+cards as carriers) — the e2e guards already refuse to burn a CE entry
+on an oversized image.
+
 ### The CE one-way door
 
 After entering card emulation, the reader **stops answering every USB
