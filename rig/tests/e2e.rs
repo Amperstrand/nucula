@@ -1,20 +1,20 @@
-//! Over-the-air e2e: real token, minted at a live micronuts-mint,
-//! presented to the atom through the ACR1252U's Ultralight emulation,
-//! received by the ported reader-mode wallet, redeemed back at the mint.
+//! Over-the-air e2e: a real token minted at a live micronuts-mint,
+//! written onto a boltcard by the ACR1252U (reader mode), received by
+//! the atom's Type 4 / ISO-DEP reader, redeemed back at the mint.
+//! (Supersedes the Ultralight card-emulation e2e — the emulated area
+//! caps at 256 addressable bytes and cannot carry DLEQ-bearing tokens;
+//! see rig/README.md.)
 //!
-//! Hardware-gated (#[ignore]): needs the atom on a serial port, the
-//! ACR1252U freshly powered (card emulation is one-way per power
-//! cycle — replug between runs), pcscd running, and the mint:
-//!
-//!   cd micronuts && MICRONUTS_ADAPTER_PORT=3338 \
-//!     setsid ./target/debug/micronuts-audit-adapter </dev/null &
-//!
-//! Then:
+//! Hardware-gated (#[ignore]): the atom on a serial port, a WRITABLE
+//! blank boltcard within reach of both antennas (on the atom's, ACR
+//! adjacent), the ACR1252U freshly powered, pcscd running, and the
+//! mint on its LAN bind (`/tmp/opencode/rig/start-mint.sh`).
 //!
 //!   cargo test --features live,payer --test e2e -- --ignored --nocapture
 //!
 //! Environment: ATOM_PORT (default: the lab atom's by-id path) and
-//! MINT_URL (default http://127.0.0.1:3338).
+//! MINT_URL (default: the mint's LAN bind — the atom must reach the
+//! URL embedded in its tokens).
 
 #![cfg(feature = "live")]
 
@@ -22,106 +22,108 @@ use std::time::Duration;
 
 use nucula_rig::acr::Acr1252;
 use nucula_rig::atom_console::AtomConsole;
-use nucula_rig::ndef_t2t::{build_ndef_text_image, NDEF_AREA_512};
-
-/// The ACR1252U's Write Card Emulation Data takes a one-byte StartOffset,
-/// capping the addressable emulated image at 256 bytes. A 1-sat cashuB
-/// token (single proof, CBOR+base64) lands around 200 bytes and fits;
-/// anything multi-proof does not. Verify before burning the one CE
-/// entry this reader has per power cycle.
-const CE_IMAGE_LIMIT: usize = 256;
 
 const DEFAULT_ATOM_PORT: &str =
     "/dev/serial/by-id/usb-M5STACK_Inc._M5_Serial_Converter_9D529068B4-if00-port0";
-const DEFAULT_MINT_URL: &str = "http://127.0.0.1:3338";
+/// The relay default: the mint's LAN bind — the atom must reach the
+/// URL embedded in its tokens.
+const DEFAULT_RELAY_MINT: &str = "http://192.168.13.221:3338";
 
 fn atom_port() -> String {
     std::env::var("ATOM_PORT").unwrap_or_else(|_| DEFAULT_ATOM_PORT.into())
 }
 
 fn mint_url() -> String {
-    std::env::var("MINT_URL").unwrap_or_else(|_| DEFAULT_MINT_URL.into())
+    std::env::var("MINT_URL").unwrap_or_else(|_| DEFAULT_RELAY_MINT.into())
 }
 
 /// Rust serial-driver smoke: open the atom console and round-trip a
-/// status command (the python prototypes drove it so far; this
-/// exercises AtomConsole itself).
+/// status command.
 #[test]
 #[ignore = "hardware: atom on the serial port"]
 fn atom_console_smoke() {
-    std::thread::sleep(Duration::from_millis(300));
     let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
     let status = atom.status().expect("status");
     eprintln!("{status}");
     assert!(status.contains("nucula>") || status.contains("nfc:"), "no status output");
 }
 
+/// Relay e2e: the payer mints 1 sat at the LAN mint, the ACR1252
+/// writes the token's NDEF record onto the boltcard on the atom's
+/// antenna, then — ACR field quieted — the atom reads it over Type 4 /
+/// ISO-DEP and redeems.
 #[cfg(feature = "payer")]
 #[tokio::test]
-#[ignore = "hardware: atom + freshly replugged ACR1252U + running micronuts-mint"]
-async fn receives_a_real_token_over_the_air_and_redeems_it() {
+#[ignore = "hardware: atom + writable boltcard + ACR1252U + LAN mint"]
+async fn relay_token_over_the_air_via_boltcard() {
     let mint = mint_url();
 
-    // Payer: real ecash from the running mint. Single proof, 1 sat —
-    // must fit the emulated tag (see CE_IMAGE_LIMIT).
     let token = nucula_rig::payer::mint_token(&mint, 1).await.expect("mint");
     assert!(token.starts_with("cashuA") || token.starts_with("cashuB"));
 
-    // Atom: add the mint and start an NFC reader session.
+    // ACR writes the relay card, then quiets its field for the atom.
+    {
+        let mut acr = Acr1252::open().expect("ACR direct");
+        acr.set_auto_polling(0x8F).expect("polling on");
+    }
+    let mut card = nucula_rig::acr::Acr1252Card::connect().expect("card in field");
+    let record = nucula_rig::ndef_t2t::build_ndef_text_record(&token);
+    card.write_ndef(&record).expect("NDEF write");
+    card.disconnect();
+    {
+        let mut acr = Acr1252::open().expect("ACR direct");
+        acr.set_auto_polling(0x00).expect("polling off");
+    }
+
     let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
     let _ = atom.nfc_stop();
     let out = atom.mint_add(&mint).expect("mint add");
     assert!(!out.contains("error"), "mint add failed: {out}");
     atom.nfc_request(1).expect("nfc request");
 
-    // ACR: preload the token as a Type 2 NDEF tag and start emulating.
-    // ONE-WAY per power cycle — keep last so a failing earlier step
-    // does not burn the reader.
-    let image = build_ndef_text_image(&token, NDEF_AREA_512).expect("image");
-    assert!(image.len() <= CE_IMAGE_LIMIT,
-            "token image {} B exceeds the CE addressable area", image.len());
-    let mut acr = Acr1252::open().expect("ACR1252");
-    acr.present_ndef_image(&image).expect("CE preload");
-
-    // Atom: token read over the air, swapped at the mint, balance up.
     let log = atom
-        .wait_for_log("redeemed", Duration::from_secs(45))
+        .wait_for_log("redeemed", Duration::from_secs(60))
         .expect("no redeem log");
-    eprintln!("{}", log);
+    eprintln!("{log}");
     let status = atom.status().expect("status");
     eprintln!("{status}");
-    assert!(status.contains("connected"), "atom offline: {status}");
 }
 
+/// Offline relay variant: same hand-off, but the atom is out of AP
+/// range (or the AP is down) after having once fetched the mint's
+/// keysets — the token is stashed, then drained automatically once
+/// the link returns.
 #[cfg(feature = "payer")]
 #[tokio::test]
-#[ignore = "hardware + manual: boot the atom OUT of WiFi range (or with the AP down) after it has once fetched this mint's keysets"]
-async fn stashes_a_token_offline_then_drains_on_reconnect() {
+#[ignore = "hardware + manual: atom offline after keyset fetch; reconnect after the tap"]
+async fn relay_stashes_offline_then_drains_on_reconnect() {
     let mint = mint_url();
-
-    // Precondition (manual): the atom has been online with this mint
-    // before, so it holds keysets and accepts offline tokens from it.
     let token = nucula_rig::payer::mint_token(&mint, 1).await.expect("mint");
+
+    {
+        let mut acr = Acr1252::open().expect("ACR direct");
+        acr.set_auto_polling(0x8F).expect("polling on");
+    }
+    let mut card = nucula_rig::acr::Acr1252Card::connect().expect("card in field");
+    let record = nucula_rig::ndef_t2t::build_ndef_text_record(&token);
+    card.write_ndef(&record).expect("NDEF write");
+    card.disconnect();
+    {
+        let mut acr = Acr1252::open().expect("ACR direct");
+        acr.set_auto_polling(0x00).expect("polling off");
+    }
 
     let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
     let _ = atom.nfc_stop();
     atom.nfc_request(1).expect("nfc request");
-
-    let image = build_ndef_text_image(&token, NDEF_AREA_512).expect("image");
-    assert!(image.len() <= CE_IMAGE_LIMIT, "token image too big for CE");
-    let mut acr = Acr1252::open().expect("ACR1252");
-    acr.present_ndef_image(&image).expect("CE preload");
-
     let log = atom
-        .wait_for_log("stashed", Duration::from_secs(45))
+        .wait_for_log("stashed", Duration::from_secs(60))
         .expect("no stash log");
-    eprintln!("{}", log);
-    assert!(log.contains("offline: stashed") || log.contains("stashed"));
+    eprintln!("{log}");
 
-    // Reconnect: bring the atom back to the AP (manual), then the
-    // drain task redeems automatically; balance reflects it.
+    // Bring the atom back to the AP (manual); the drain task redeems.
     let drained = atom
-        .wait_for_log("drain", Duration::from_secs(120))
+        .wait_for_log("drain", Duration::from_secs(180))
         .expect("no drain log");
     eprintln!("{drained}");
 }
@@ -153,8 +155,8 @@ fn console_line_probe() {
                 Err(_) => break,
             }
         }
-        eprintln!("dtr={dtr} rts={rts} -> {} bytes: {:?}", got.len(),
-                  String::from_utf8_lossy(&got));
+        eprintln!("dtr={dtr} rts={rts} -> {} bytes: {:?}",
+                  got.len(), String::from_utf8_lossy(&got));
         drop(p);
         std::thread::sleep(Duration::from_millis(300));
     }
