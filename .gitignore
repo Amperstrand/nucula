@@ -21,3 +21,5 @@ main/wifi_config.h
 # IDE
 .vscode/
 .idea/
+sdkconfig.atom
+build-atom/

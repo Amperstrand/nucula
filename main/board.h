@@ -2,21 +2,33 @@
 
 #include "driver/gpio.h"
 
-// Board definition: Seeed XIAO ESP32-C3
-//
-// One shared I2C bus carries all three peripherals. Each driver probes for
-// its device at init and disables itself when absent, so a bare module
-// still boots into a working console + wallet.
+// Board definition. One shared I2C bus carries all peripherals; each
+// driver probes for its device at init and disables itself when absent,
+// so a bare module still boots into a working console + wallet.
 //
 // PN7160-specific pins (IRQ/VEN/DWL) live with the driver in nci.h.
 
-// Shared I2C bus
+#if CONFIG_NUCULA_BOARD_ATOM
+
+// M5Stack Atom Matrix + MFRC522 over the Grove port (same wiring as the
+// ccid-firmware-rs esp32-ccid board-m5atom rig).
+#define BOARD_I2C_SDA_PIN   GPIO_NUM_26  // Grove SDA
+#define BOARD_I2C_SCL_PIN   GPIO_NUM_32  // Grove SCL
+#define BOARD_MFRC522_ADDR  0x28
+
+#else // XIAO ESP32-C3
+
 #define BOARD_I2C_SDA_PIN   GPIO_NUM_6   // D4
 #define BOARD_I2C_SCL_PIN   GPIO_NUM_7   // D5
 
+#endif
+
+// Peripherals below probe for their device on the shared bus and disable
+// themselves when absent, so the constants stay board-independent.
+
 // SSD1309 OLED (SA0 low = 0x3C, SA0 high = 0x3D)
 #define BOARD_OLED_ADDR     0x3C
-// Optional hardware reset pin (D3). Set to -1 if not wired.
+// Optional hardware reset pin (XIAO D3). Set to -1 if not wired.
 #define BOARD_OLED_RST_PIN  GPIO_NUM_5
 
 // PCF8574 keypad I/O expander
