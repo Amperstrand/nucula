@@ -1,0 +1,15 @@
+[package]
+name = "nucula-rig"
+version = "0.1.0"
+edition = "2021"
+description = "Host-side rig for the nucula atom port: ACR1252U control, NDEF Type 2 images, payer wallet, e2e tests"
+
+[features]
+default = []
+# Live-hardware paths (requires pcscd + an ACR1252U, plus the atom on a
+# serial port). Pure-logic unit tests run without this feature.
+live = ["dep:pcsc", "dep:serialport"]
+
+[dependencies]
+pcsc = { version = "2.9", optional = true }
+serialport = { version = "4", optional = true }

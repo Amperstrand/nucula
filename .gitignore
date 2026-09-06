@@ -23,3 +23,4 @@ main/wifi_config.h
 .idea/
 sdkconfig.atom
 build-atom/
+rig/target/
