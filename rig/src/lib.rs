@@ -15,3 +15,6 @@ pub mod acr;
 
 #[cfg(feature = "live")]
 pub mod atom_console;
+
+#[cfg(feature = "payer")]
+pub mod payer;

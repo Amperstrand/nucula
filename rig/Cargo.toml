@@ -9,7 +9,13 @@ default = []
 # Live-hardware paths (requires pcscd + an ACR1252U, plus the atom on a
 # serial port). Pure-logic unit tests run without this feature.
 live = ["dep:pcsc", "dep:serialport"]
+# cdk-based payer: mints real tokens from a running micronuts-mint.
+payer = ["dep:cdk", "dep:cdk-sqlite", "dep:rand", "dep:tokio"]
 
 [dependencies]
 pcsc = { version = "2.9", optional = true }
 serialport = { version = "4", optional = true }
+cdk = { path = "/home/ubuntu/src/cdk/crates/cdk", optional = true }
+cdk-sqlite = { path = "/home/ubuntu/src/cdk/crates/cdk-sqlite", optional = true }
+rand = { version = "0.9", optional = true }
+tokio = { version = "1", optional = true, features = ["rt", "macros", "time"] }
