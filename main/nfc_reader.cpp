@@ -135,6 +135,93 @@ static bool t2_read_ndef_text(std::string &text_out)
     }
 }
 
+// Type 4 NDEF (ISO-DEP): SELECT the NDEF application and files, read
+// the message via READ BINARY. Mirrors the NFC Forum Type 4 Tag
+// mapping; every APDU response carries SW 9000 after the data.
+static bool t4t_read_ndef_text(std::string &text_out)
+{
+    rc522_isodep_t s;
+    if (!rc522_isodep_connect(&s)) {
+        ESP_LOGW(TAG, "t4: RATS/ATS failed");
+        return false;
+    }
+    bool ok = false;
+    uint8_t r[70];
+    size_t rl;
+
+    auto ok_sw = [&]() { return rl >= 2 && r[rl - 2] == 0x90 && r[rl - 1] == 0x00; };
+
+    do {
+        static const uint8_t SEL_APP[] = {
+            0x00, 0xA4, 0x04, 0x00, 0x07,
+            0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01, 0x00,
+        };
+        if (!rc522_isodep_exchange(&s, SEL_APP, sizeof(SEL_APP), r, sizeof(r), &rl) ||
+            !ok_sw()) {
+            ESP_LOGW(TAG, "t4: NDEF app select failed");
+            break;
+        }
+
+        static const uint8_t SEL_CC[] = {0x00, 0xA4, 0x00, 0x0C, 0x02, 0xE1, 0x03};
+        if (!rc522_isodep_exchange(&s, SEL_CC, sizeof(SEL_CC), r, sizeof(r), &rl) ||
+            !ok_sw() || rl < 17) { // 15 CC bytes + SW
+            ESP_LOGW(TAG, "t4: CC select failed");
+            break;
+        }
+        // CC: len(2) ver(1) MLe(2) MLc(2) fid(2) size(2) read(1) write(1)
+        uint16_t ndef_fid = ((uint16_t)r[7] << 8) | r[8];
+        uint16_t ndef_size = ((uint16_t)r[9] << 8) | r[10];
+        if (ndef_size == 0 || ndef_size > NDEF_MAX_DATA_SIZE) {
+            ESP_LOGW(TAG, "t4: implausible NDEF size %u", (unsigned)ndef_size);
+            break;
+        }
+
+        uint8_t sel_file[] = {0x00, 0xA4, 0x00, 0x0C, 0x02,
+                              (uint8_t)(ndef_fid >> 8), (uint8_t)ndef_fid};
+        if (!rc522_isodep_exchange(&s, sel_file, sizeof(sel_file), r, sizeof(r), &rl) ||
+            !ok_sw()) {
+            ESP_LOGW(TAG, "t4: NDEF file select failed");
+            break;
+        }
+
+        static const uint8_t RD_NLEN[] = {0x00, 0xB0, 0x00, 0x00, 0x02};
+        if (!rc522_isodep_exchange(&s, RD_NLEN, sizeof(RD_NLEN), r, sizeof(r), &rl) ||
+            !ok_sw() || rl < 4) {
+            ESP_LOGW(TAG, "t4: NLEN read failed");
+            break;
+        }
+        uint16_t nlen = ((uint16_t)r[0] << 8) | r[1];
+        if (nlen == 0 || nlen > NDEF_MAX_DATA_SIZE) {
+            ESP_LOGW(TAG, "t4: bad NLEN %u", (unsigned)nlen);
+            break;
+        }
+
+        static uint8_t msg[NDEF_MAX_DATA_SIZE];
+        size_t got = 0;
+        bool read_ok = true;
+        while (got < nlen) {
+            uint8_t chunk = (uint8_t)(nlen - got < 32 ? nlen - got : 32);
+            uint8_t rd[] = {0x00, 0xB0, (uint8_t)((got + 2) >> 8),
+                            (uint8_t)(got + 2), chunk};
+            if (!rc522_isodep_exchange(&s, rd, sizeof(rd), r, sizeof(r), &rl) ||
+                !ok_sw() || rl < (size_t)chunk + 2) {
+                ESP_LOGW(TAG, "t4: read @%u failed", (unsigned)got);
+                read_ok = false;
+                break;
+            }
+            memcpy(&msg[got], r, chunk);
+            got += chunk;
+        }
+        if (!read_ok)
+            break;
+
+        ok = ndef_parse_message(msg, nlen, text_out);
+    } while (false);
+
+    rc522_isodep_end(&s);
+    return ok;
+}
+
 // -------------------------------------------------------------------------
 // Reader session task
 // -------------------------------------------------------------------------
@@ -148,6 +235,9 @@ struct NfcRequestParams {
 static void nfc_task(void *arg)
 {
     auto *params = static_cast<NfcRequestParams *>(arg);
+
+    rc522_field(true); // radiate only while a session is active
+    vTaskDelay(pdMS_TO_TICKS(20)); // tag power-up from a cold field
 
     // Reader mode receives pre-minted tokens; there is no NUT-18 request
     // to encode. Prime TLS to the expected mint while waiting anyway.
@@ -190,7 +280,9 @@ static void nfc_task(void *arg)
         s_state.store(NfcState::active);
 
         std::string text;
-        if (!t2_read_ndef_text(text)) {
+        bool have_text = (tag.sak & 0x20) ? t4t_read_ndef_text(text)
+                                          : t2_read_ndef_text(text);
+        if (!have_text) {
             ESP_LOGW(TAG, "no NDEF text on tag");
             vTaskDelay(pdMS_TO_TICKS(1000));
             s_state.store(NfcState::waiting);
@@ -228,6 +320,7 @@ static void nfc_task(void *arg)
         break;
     }
 
+    rc522_field(false);
     delete params;
     s_task_handle = nullptr;
     xSemaphoreGive(s_task_done);

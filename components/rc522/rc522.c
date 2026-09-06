@@ -274,11 +274,10 @@ esp_err_t rc522_init(i2c_master_bus_handle_t bus, uint8_t addr)
     if (!rc522_wr(0x26, 0x70))
         return ESP_ERR_INVALID_STATE;
 
-    // Antenna drivers on (TxControlReg TX1RFEn | TX2RFEn).
-    uint8_t txctl;
-    if (!rc522_rd(RC522_TxControlReg, &txctl))
-        return ESP_ERR_INVALID_STATE;
-    if (!rc522_wr(RC522_TxControlReg, txctl | 0x03))
+    // Antenna stays OFF at idle: sessions (and nfcdump) enable the
+    // field via rc522_field(), so a co-located writer — the rig's
+    // ACR1252 reaching the sandwiched card — never sees two fields.
+    if (!rc522_field(false))
         return ESP_ERR_INVALID_STATE;
 
     return ESP_OK;
@@ -485,4 +484,145 @@ bool rc522_ul_read(uint8_t page, uint8_t out[16])
 
     memcpy(out, rx, 16);
     return true;
+}
+
+// -------------------------------------------------------------------------
+// ISO-DEP (ISO14443-4): CID-less T=CL for Type 4 NDEF tags
+// -------------------------------------------------------------------------
+
+bool rc522_field(bool on)
+{
+    uint8_t txctl;
+    if (!rc522_rd(RC522_TxControlReg, &txctl))
+        return false;
+    return rc522_wr(RC522_TxControlReg, on ? (txctl | 0x03) : (txctl & ~0x03));
+}
+
+static void isodep_set_timeout_ms(uint32_t ms)
+{
+    // 40 kHz timer tick (prescaler 0xA9), reload capped to 16 bits.
+    uint32_t reload = ms * 40000u / 1000u;
+    if (reload > 0xFFFFu)
+        reload = 0xFFFFu;
+    rc522_wr(RC522_TModeReg, 0x80);
+    rc522_wr(RC522_TPrescalerReg, 0xA9);
+    rc522_wr(RC522_TReloadRegHigh, (reload >> 8) & 0xFF);
+    rc522_wr(RC522_TReloadRegLow, reload & 0xFF);
+}
+
+bool rc522_isodep_connect(rc522_isodep_t *s)
+{
+    memset(s, 0, sizeof(*s));
+    // Hardware CRC on both directions for T=CL frames.
+    if (!rc522_wr(RC522_TxModeReg, 0x80) || !rc522_wr(RC522_RxModeReg, 0x80))
+        return false;
+    isodep_set_timeout_ms(20);
+
+    // RATS: FSDI 6 (FSD 64), CID 0. Hardware CRC is appended/stripped.
+    uint8_t rats[2] = {0xE0, 0x60};
+    uint8_t rx[40];
+    size_t rx_len;
+    uint8_t rx_bits;
+    if (!rc522_transceive(rats, 2, 0, 0, rx, sizeof(rx), &rx_len, &rx_bits) ||
+        rx_bits != 0 || rx_len < 2)
+        goto fail;
+
+    // ATS: TL [T0 [TA TB TC ...] historical]. FSCI (T0 low nibble)
+    // sizes the card's frames; TB high nibble is the FWI.
+    uint8_t tl = rx[0];
+    if (tl < 2 || rx_len < tl)
+        goto fail;
+    uint8_t fsci = 8;
+    uint32_t fwi = 4;
+    if (tl > 1) {
+        uint8_t t0 = rx[1];
+        fsci = t0 & 0x0F;
+        uint8_t n_if = (t0 >> 5) & 0x07;
+        size_t pos = 2;
+        for (uint8_t i = 0; i < n_if && pos < (size_t)tl && pos < rx_len; i++, pos++) {
+            if (i == 1)
+                fwi = rx[pos] >> 4; // TB
+        }
+    }
+    s->fsc = fsci <= 8 ? (uint8_t)((uint16_t[]){16,24,32,40,48,64,96,128,256}[fsci]) : 64;
+    if (s->fsc > 64)
+        s->fsc = 64; // our FIFO
+    uint32_t fwt_us = 302u << fwi;
+    s->fwt_ms = (fwt_us + 999u) / 1000u;
+    if (s->fwt_ms < 5)
+        s->fwt_ms = 5;
+    if (s->fwt_ms > 200)
+        s->fwt_ms = 200;
+    s->hw_crc = true;
+    isodep_set_timeout_ms(s->fwt_ms);
+    ESP_LOGI(TAG, "ISODEP up: ATS %d B, fsci=%d fsc=%d fwi=%u fwt=%lu ms",
+             tl, fsci, s->fsc, (unsigned)fwi, (unsigned long)s->fwt_ms);
+    return true;
+
+fail:
+    rc522_wr(RC522_TxModeReg, 0x00);
+    rc522_wr(RC522_RxModeReg, 0x00);
+    return false;
+}
+
+void rc522_isodep_end(rc522_isodep_t *s)
+{
+    rc522_wr(RC522_TxModeReg, 0x00);
+    rc522_wr(RC522_RxModeReg, 0x00);
+    isodep_set_timeout_ms(100);
+    s->hw_crc = false;
+}
+
+bool rc522_isodep_exchange(rc522_isodep_t *s,
+                           const uint8_t *apdu, size_t apdu_len,
+                           uint8_t *out, size_t out_cap, size_t *out_len)
+{
+    if (apdu_len + 3 > s->fsc)
+        return false; // caller must chunk; we never chain our TX
+
+    uint8_t tx[70];
+    tx[0] = 0x02 | ((s->block_nr & 1) << 6); // I-block, no chaining
+    memcpy(&tx[1], apdu, apdu_len);
+
+    uint8_t rx[70];
+    size_t rx_len;
+    uint8_t rx_bits;
+    if (!rc522_transceive(tx, apdu_len + 1, 0, 0, rx, sizeof(rx), &rx_len, &rx_bits) ||
+        rx_bits != 0)
+        return false;
+    s->block_nr ^= 1;
+
+    size_t got = 0;
+    for (;;) {
+        if (rx_len < 1)
+            return false;
+        uint8_t pcb = rx[0];
+        if ((pcb & 0x80) == 0) {
+            // I-block from the card; collect INF, ACK chaining.
+            size_t inf = rx_len - 1;
+            if (got + inf > out_cap)
+                return false;
+            memcpy(&out[got], &rx[1], inf);
+            got += inf;
+            if (!(pcb & 0x10)) {
+                *out_len = got;
+                return true;
+            }
+            uint8_t ack = 0xA2 | (((pcb >> 6) & 1) ^ 1) << 6;
+            if (!rc522_transceive(&ack, 1, 0, 0, rx, sizeof(rx), &rx_len, &rx_bits) ||
+                rx_bits != 0)
+                return false;
+        } else if (pcb == 0xF2 && rx_len >= 2) {
+            // S(WTX): echo the multiplier, widen the window for the retry.
+            uint8_t wtxm = rx[1] > 59 ? 59 : rx[1];
+            isodep_set_timeout_ms(s->fwt_ms * (wtxm ? wtxm : 1));
+            uint8_t reply[2] = {0xF2, wtxm};
+            if (!rc522_transceive(reply, 2, 0, 0, rx, sizeof(rx), &rx_len, &rx_bits) ||
+                rx_bits != 0)
+                return false;
+            isodep_set_timeout_ms(s->fwt_ms);
+        } else {
+            return false; // R-block or unexpected S-block mid-exchange
+        }
+    }
 }
