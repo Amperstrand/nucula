@@ -1,4 +1,6 @@
 #include "commands.h"
+#include "sdkconfig.h"
+#include "board.h"
 #include "console.h"
 #include "wallet.hpp"
 #include "wallet_store.hpp"
@@ -22,6 +24,8 @@
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
+#include "driver/i2c_master.h"
+#include "i2c_bus.h"
 
 #define TAG "nucula"
 
@@ -180,10 +184,195 @@ static void cmd_keypad(const char *arg)
     console_print("scan done\r\n");
 }
 
+// Scan one bus handle for ACKing devices; prints hex addresses.
+static int scan_devices(i2c_master_bus_handle_t bus, int sda, int scl)
+{
+    int found = 0;
+    for (uint8_t addr = 1; addr < 0x78; addr++) {
+        i2c_device_config_t dev = {};
+        dev.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+        dev.device_address = addr;
+        dev.scl_speed_hz = 100000;
+        i2c_master_dev_handle_t dh;
+        if (i2c_master_bus_add_device(bus, &dev, &dh) == ESP_OK) {
+            uint8_t reg = 0x37; // VersionReg — read is safe on an MFRC522
+            uint8_t val;
+            if (i2c_master_transmit_receive(dh, &reg, 1, &val, 1, 20) == ESP_OK) {
+                console_printf("  0x%02X (%02X) @ sda=%d scl=%d\r\n",
+                               addr, val, sda, scl);
+                found++;
+            }
+            i2c_master_bus_rm_device(dh);
+        }
+        if ((addr & 0x0F) == 0x0F)
+            vTaskDelay(1); // feed the task watchdog between probe batches
+    }
+    return found;
+}
+
+#if CONFIG_NUCULA_BOARD_ATOM
+// Second-controller helpers for probing arbitrary pin pairs: the main
+// bus owns I2C_NUM_0, and classic ESP32 has a second controller (the
+// C3 does not — these diagnostics are atom-only).
+static int scan_bus(int sda, int scl)
+{
+    // Anonymous-union member (clk_source) makes designated initializers
+    // unusable for this struct in C++.
+    i2c_master_bus_config_t cfg = {};
+    cfg.i2c_port = I2C_NUM_1;
+    cfg.sda_io_num = (gpio_num_t)sda;
+    cfg.scl_io_num = (gpio_num_t)scl;
+    cfg.clk_source = I2C_CLK_SRC_DEFAULT;
+    cfg.glitch_ignore_cnt = 7;
+    cfg.flags.enable_internal_pullup = true;
+    i2c_master_bus_handle_t bus = nullptr;
+    if (i2c_new_master_bus(&cfg, &bus) != ESP_OK || !bus)
+        return -1;
+    int found = scan_devices(bus, sda, scl);
+    i2c_del_master_bus(bus);
+    return found;
+}
+
+static void cmd_i2cdump(const char *arg)
+{
+    int sda = 33, scl = 32, addr = 0x5D;
+    if (arg && strlen(arg) > 0 &&
+        sscanf(arg, "%d %d %x", &sda, &scl, &addr) != 3) {
+        console_print("usage: i2cdump <sda> <scl> <addr-hex> — dump regs 00-3F\r\n");
+        return;
+    }
+    // Anonymous-union member (clk_source) makes designated initializers
+    // unusable for this struct in C++.
+    i2c_master_bus_config_t cfg = {};
+    cfg.i2c_port = I2C_NUM_1;
+    cfg.sda_io_num = (gpio_num_t)sda;
+    cfg.scl_io_num = (gpio_num_t)scl;
+    cfg.clk_source = I2C_CLK_SRC_DEFAULT;
+    cfg.glitch_ignore_cnt = 7;
+    cfg.flags.enable_internal_pullup = true;
+    i2c_master_bus_handle_t bus = nullptr;
+    if (i2c_new_master_bus(&cfg, &bus) != ESP_OK || !bus) {
+        console_print("bus create failed\r\n");
+        return;
+    }
+    i2c_device_config_t dev = {};
+    dev.dev_addr_length = I2C_ADDR_BIT_LEN_7;
+    dev.device_address = (uint8_t)addr;
+    dev.scl_speed_hz = 100000;
+    i2c_master_dev_handle_t dh;
+    if (i2c_master_bus_add_device(bus, &dev, &dh) != ESP_OK) {
+        console_print("device add failed\r\n");
+        i2c_del_master_bus(bus);
+        return;
+    }
+    for (int r = 0; r < 0x40; r += 8) {
+        console_printf("%02X:", r);
+        for (int i = 0; i < 8; i++) {
+            uint8_t reg = (uint8_t)(r + i), val;
+            if (i2c_master_transmit_receive(dh, &reg, 1, &val, 1, 20) == ESP_OK)
+                console_printf(" %02X", val);
+            else
+                console_print(" --");
+        }
+        console_print("\r\n");
+    }
+    i2c_master_bus_rm_device(dh);
+    i2c_del_master_bus(bus);
+}
+#endif
+
+static void cmd_i2cscan(const char *arg)
+{
+    int total = 0;
+    console_printf("scanning main bus sda=%d scl=%d...\r\n",
+                   BOARD_I2C_SDA_PIN, BOARD_I2C_SCL_PIN);
+    int n = scan_devices(i2c_bus_get(), BOARD_I2C_SDA_PIN, BOARD_I2C_SCL_PIN);
+    if (n <= 0)
+        console_print("  nothing found\r\n");
+    total += n > 0 ? n : 0;
+
+#if CONFIG_NUCULA_BOARD_ATOM
+    if (arg && strlen(arg) > 0) {
+        int sda, scl;
+        if (sscanf(arg, "%d %d", &sda, &scl) != 2) {
+            console_print("usage: i2cscan [sda scl] — scan one pair, or sweep common pins\r\n");
+            return;
+        }
+        console_printf("scanning sda=%d scl=%d...\r\n", sda, scl);
+        if (scan_bus(sda, scl) == 0)
+            console_print("  nothing found\r\n");
+        console_print("scan done\r\n");
+        return;
+    }
+
+    static const int pairs[][2] = {
+        {26, 32}, {32, 33}, {21, 22}, {25, 26}, {16, 17}, {33, 32},
+    };
+    for (auto &p : pairs) {
+        if (p[0] == BOARD_I2C_SDA_PIN && p[1] == BOARD_I2C_SCL_PIN)
+            continue;
+        console_printf("scanning sda=%d scl=%d...\r\n", p[0], p[1]);
+        n = scan_bus(p[0], p[1]);
+        if (n <= 0)
+            console_print("  nothing found\r\n");
+        total += n > 0 ? n : 0;
+    }
+#endif
+    console_printf("scan done, %d device(s)\r\n", total);
+}
+
+#if CONFIG_NUCULA_BOARD_ATOM
+#include "rc522.h"
+static void cmd_nfcdump(const char *arg)
+{
+    int pages = arg && strlen(arg) > 0 ? atoi(arg) : 16;
+    if (pages <= 0 || pages > 64) pages = 16;
+    rc522_tag_t tag;
+    if (!rc522_poll(&tag)) {
+        console_print("no tag\r\n");
+        return;
+    }
+    console_printf("uid_len=%d uid=", (int)tag.uid_len);
+    for (int i = 0; i < tag.uid_len; i++)
+        console_printf("%02X", tag.uid[i]);
+    console_printf(" sak=%02X\r\n", tag.sak);
+    for (int p = 0; p < pages; p += 4) {
+        uint8_t blk[16];
+        if (!rc522_ul_read((uint8_t)p, blk)) {
+            console_printf("%02X: read failed\r\n", p);
+            return;
+        }
+        console_printf("%02X:", p);
+        for (int i = 0; i < 16; i++)
+            console_printf(" %02X", blk[i]);
+        console_print("\r\n");
+    }
+}
+#endif
+
+static void cmd_i2crecover(const char *arg)
+{
+    int clocks = arg && strlen(arg) > 0 ? atoi(arg) : 32;
+    if (clocks <= 0 || clocks > 4096) {
+        console_print("usage: i2crecover <clocks> — SCL-clock a stuck bus\r\n");
+        return;
+    }
+    bool ok = i2c_bus_recover(clocks);
+    console_printf("recovery(%d clocks): %s\r\n", clocks,
+                   ok ? "SDA high" : "SDA STILL LOW");
+    console_print("reboot before using the bus again\r\n");
+}
+
 void commands_system_register(void)
 {
     console_register_cmd("nfc",     cmd_nfc,      "nfc [request <amount>|stop]");
     console_register_cmd("keypad",  cmd_keypad,   "keypad scan — probe PCF8574 wiring");
+    console_register_cmd("i2cscan", cmd_i2cscan,  "i2cscan [sda scl] — find I2C devices");
+    console_register_cmd("i2crecover", cmd_i2crecover, "i2crecover <clocks> — clear stuck bus");
+#if CONFIG_NUCULA_BOARD_ATOM
+    console_register_cmd("i2cdump", cmd_i2cdump, "i2cdump <sda> <scl> <addr> — dump regs");
+    console_register_cmd("nfcdump", cmd_nfcdump, "nfcdump [pages] — dump tag pages");
+#endif
     console_register_cmd("reboot",  cmd_reboot,   "restart the device");
     console_register_cmd("heap",    cmd_heap,     "show heap usage");
     console_register_cmd("tasks",   cmd_tasks,    "show task stack high-water marks");
