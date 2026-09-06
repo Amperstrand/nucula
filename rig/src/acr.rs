@@ -167,3 +167,141 @@ impl Acr1252 {
         self.enter_ultralight_emulation()
     }
 }
+
+// ---------------------------------------------------------------------------
+// Reader-mode card access: write an NDEF message onto a Type 4 tag in
+// the field (the relay carrier — a blank NTAG424 boltcard). Uses the
+// same PICC interface in PC/SC card mode (T=1 over T=CL).
+// ---------------------------------------------------------------------------
+
+use pcsc::Disposition;
+
+#[derive(Debug)]
+pub enum CardError {
+    NoCard(String),
+    Apdu { cmd: &'static str, sw: u16 },
+    Pcsc(pcsc::Error),
+    BadCc,
+}
+
+impl fmt::Display for CardError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CardError::NoCard(w) => write!(f, "no type 4 tag in the field: {w}"),
+            CardError::Apdu { cmd, sw } => write!(f, "{cmd}: SW {sw:04X}"),
+            CardError::Pcsc(e) => write!(f, "pcsc: {e}"),
+            CardError::BadCc => write!(f, "implausible capability container"),
+        }
+    }
+}
+
+impl std::error::Error for CardError {}
+
+impl From<pcsc::Error> for CardError {
+    fn from(e: pcsc::Error) -> Self {
+        CardError::Pcsc(e)
+    }
+}
+
+pub struct Acr1252Card {
+    card: pcsc::Card,
+}
+
+impl Acr1252Card {
+    /// Connect to the (single) tag the reader is polling. Auto-polling
+    /// must be on — `Acr1252::set_auto_polling(0x8F)` first.
+    pub fn connect() -> Result<Self, CardError> {
+        let ctx = Context::establish(pcsc::Scope::User)?;
+        let mut names = [0u8; 2048];
+        let reader = ctx
+            .list_readers(&mut names)?
+            .find(|r| r.to_string_lossy().contains("PICC"))
+            .ok_or(CardError::NoCard("PICC interface missing".into()))?;
+        let card = ctx
+            .connect(reader, ShareMode::Shared, Protocols::T1)
+            .map_err(|e| CardError::NoCard(e.to_string()))?;
+        Ok(Self { card })
+    }
+
+    /// Transmit one APDU, following GetResponse chains; returns the
+    /// response body with the trailing SW stripped (Err on != 9000).
+    fn apdu(&mut self, cmd: &'static str, send: &[u8]) -> Result<Vec<u8>, CardError> {
+        let mut buf = [0u8; 512];
+        let mut send = send.to_vec();
+        let mut out = Vec::new();
+        loop {
+            let resp = self.card.transmit(&send, &mut buf)?;
+            if resp.len() < 2 {
+                return Err(CardError::Apdu { cmd, sw: 0 });
+            }
+            let sw = ((resp[resp.len() - 2] as u16) << 8) | resp[resp.len() - 2 + 1] as u16;
+            let body = &resp[..resp.len() - 2];
+            match sw {
+                0x9000 => {
+                    out.extend_from_slice(body);
+                    return Ok(out);
+                }
+                0x6100..=0x61FF => {
+                    out.extend_from_slice(body);
+                    send = vec![0x00, 0xC0, 0x00, 0x00, (sw & 0xFF) as u8];
+                }
+                _ => return Err(CardError::Apdu { cmd, sw }),
+            }
+        }
+    }
+
+    /// Write an NDEF message (record bytes, see
+    /// [`crate::ndef_t2t::build_ndef_text_record`]) into the tag's
+    /// NDEF file: select application/CC/file, update NLEN + payload,
+    /// verify by readback.
+    pub fn write_ndef(&mut self, ndef_message: &[u8]) -> Result<(), CardError> {
+        const SEL_APP: &[u8] = &[
+            0x00, 0xA4, 0x04, 0x00, 0x07,
+            0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01, 0x00,
+        ];
+        const SEL_CC: &[u8] = &[0x00, 0xA4, 0x00, 0x0C, 0x02, 0xE1, 0x03];
+        const READ_CC: &[u8] = &[0x00, 0xB0, 0x00, 0x00, 0x0F];
+        self.apdu("select NDEF app", SEL_APP)?;
+        self.apdu("select CC", SEL_CC)?;
+        let cc = self.apdu("read CC", READ_CC)?;
+        if cc.len() < 11 {
+            return Err(CardError::BadCc);
+        }
+        let fid = ((cc[7] as u16) << 8) | cc[8] as u16;
+        let mlc = ((cc[5] as u16) << 8) | cc[6] as u16;
+        let file_size = ((cc[9] as u16) << 8) | cc[10] as u16;
+        let need = ndef_message.len() as u16 + 2;
+        if fid != 0xE104 || file_size < need {
+            return Err(CardError::BadCc);
+        }
+
+        let sel_file = [0x00, 0xA4, 0x00, 0x0C, 0x02, (fid >> 8) as u8, fid as u8];
+        self.apdu("select NDEF file", &sel_file)?;
+
+        // NLEN (big-endian) then the message, chunked by MLc.
+        let mut file = Vec::with_capacity(need as usize);
+        file.extend_from_slice(&(ndef_message.len() as u16).to_be_bytes());
+        file.extend_from_slice(ndef_message);
+        let chunk = mlc.min(0xF0) as usize;
+        let mut off = 0usize;
+        while off < file.len() {
+            let end = (off + chunk).min(file.len());
+            let mut upd = vec![0x00, 0xD6, (off >> 8) as u8, off as u8, (end - off) as u8];
+            upd.extend_from_slice(&file[off..end]);
+            self.apdu("update NDEF file", &upd)?;
+            off = end;
+        }
+
+        // Readback: NLEN must round-trip.
+        let rd = [0x00, 0xB0, 0x00, 0x00, 0x02];
+        let nlen = self.apdu("verify NLEN", &rd)?;
+        if nlen != (ndef_message.len() as u16).to_be_bytes() {
+            return Err(CardError::Apdu { cmd: "verify NLEN", sw: 0xDEAD });
+        }
+        Ok(())
+    }
+
+    pub fn disconnect(self) {
+        let _ = self.card.disconnect(Disposition::LeaveCard);
+    }
+}

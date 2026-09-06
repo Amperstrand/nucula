@@ -30,21 +30,16 @@ impl fmt::Display for ImageError {
 
 impl std::error::Error for ImageError {}
 
-/// Build a Type 2 NDEF image carrying `text` as an NFC Forum Text
-/// record ("en", UTF-8), padded to `area` bytes total (CC included).
-///
-/// The CC advertises the full area as read/write NDEF memory. TLV
-/// lengths of 254+ use the three-byte form (`03 FF hi lo`).
-pub fn build_ndef_text_image(text: &str, area: usize) -> Result<Vec<u8>, ImageError> {
-    assert!(area >= 8 && area <= 0xFF * 8, "area must be 8..2040 bytes");
-
+/// One NFC Forum Text record ("en", UTF-8) carrying `text`. MB|ME set;
+/// short form (1-byte length) under 256 payload bytes, 4-byte length
+/// above. Shared by the Type 2 image builder and the Type 4 file
+/// writer.
+pub fn build_ndef_text_record(text: &str) -> Vec<u8> {
     let mut payload = Vec::with_capacity(text.len() + 3);
     payload.push(0x02); // status: UTF-8, 2-byte language code
     payload.extend_from_slice(b"en");
     payload.extend_from_slice(text.as_bytes());
 
-    // MB|ME with the SR bit for payloads under 256 (1-byte length);
-    // longer payloads use the 4-byte big-endian length form.
     let mut record = Vec::with_capacity(payload.len() + 7);
     if payload.len() < 0x100 {
         record.extend_from_slice(&[0xD1, 0x01, payload.len() as u8, 0x54]);
@@ -54,6 +49,18 @@ pub fn build_ndef_text_image(text: &str, area: usize) -> Result<Vec<u8>, ImageEr
         record.push(0x54);
     }
     record.extend_from_slice(&payload);
+    record
+}
+
+/// Build a Type 2 NDEF image carrying `text` as an NFC Forum Text
+/// record, padded to `area` bytes total (CC included).
+///
+/// The CC advertises the full area as read/write NDEF memory. TLV
+/// lengths of 254+ use the three-byte form (`03 FF hi lo`).
+pub fn build_ndef_text_image(text: &str, area: usize) -> Result<Vec<u8>, ImageError> {
+    assert!(area >= 8 && area <= 0xFF * 8, "area must be 8..2040 bytes");
+
+    let record = build_ndef_text_record(text);
 
     let mut tlv = Vec::with_capacity(record.len() + 4);
     tlv.push(0x03); // NDEF message TLV
