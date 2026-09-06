@@ -1,12 +1,56 @@
+#include "sdkconfig.h"
 #include "console.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#if CONFIG_NUCULA_BOARD_ATOM
+#include "driver/uart.h"
+#else
 #include "driver/usb_serial_jtag.h"
 #include "driver/usb_serial_jtag_vfs.h"
+#endif
 #include <cstring>
 #include <cstdio>
 #include <cstdarg>
 #include <vector>
+
+#if CONFIG_NUCULA_BOARD_ATOM
+// Classic ESP32 has no USB-serial-JTAG peripheral; the console rides
+// UART0 through the on-board CH340.
+#define CONSOLE_UART_NUM UART_NUM_0
+static int io_read(uint8_t *buf, size_t len, TickType_t timeout)
+{
+    return uart_read_bytes(CONSOLE_UART_NUM, buf, len, timeout);
+}
+static int io_write(const void *buf, size_t len, TickType_t timeout)
+{
+    return uart_write_bytes(CONSOLE_UART_NUM, buf, len);
+}
+static esp_err_t io_driver_install(size_t tx, size_t rx)
+{
+    return uart_driver_install(CONSOLE_UART_NUM, rx * 2, tx, 0, NULL, 0);
+}
+#else
+static int io_read(uint8_t *buf, size_t len, TickType_t timeout)
+{
+    return usb_serial_jtag_read_bytes(buf, len, timeout);
+}
+static int io_write(const void *buf, size_t len, TickType_t timeout)
+{
+    (void)timeout;
+    return usb_serial_jtag_write_bytes(buf, len, portMAX_DELAY);
+}
+static esp_err_t io_driver_install(size_t tx, size_t rx)
+{
+    usb_serial_jtag_driver_config_t usb_config = {
+        .tx_buffer_size = tx,
+        .rx_buffer_size = rx,
+    };
+    esp_err_t err = usb_serial_jtag_driver_install(&usb_config);
+    if (err == ESP_OK)
+        usb_serial_jtag_vfs_use_driver();
+    return err;
+}
+#endif
 
 #define MAX_COMMANDS 32
 
@@ -29,7 +73,7 @@ static struct {
 void console_print(const char *str)
 {
     if (str)
-        usb_serial_jtag_write_bytes(str, strlen(str), portMAX_DELAY);
+        io_write(str, strlen(str), portMAX_DELAY);
 }
 
 void console_printf(const char *fmt, ...)
@@ -106,15 +150,13 @@ static void console_task(void *arg)
     // dropping bytes mid-token.
     while (1) {
         uint8_t buf[64];
-        int len = usb_serial_jtag_read_bytes(buf, sizeof(buf),
-                                             20 / portTICK_PERIOD_MS);
+        int len = io_read(buf, sizeof(buf), 20 / portTICK_PERIOD_MS);
         if (len <= 0) continue;
 
         int echo_from = -1;  // start of the unechoed printable run in buf
         auto flush_echo = [&](int upto) {
             if (echo_from >= 0 && upto > echo_from)
-                usb_serial_jtag_write_bytes(&buf[echo_from],
-                                            upto - echo_from, portMAX_DELAY);
+                io_write(&buf[echo_from], upto - echo_from, portMAX_DELAY);
             echo_from = -1;
         };
 
@@ -166,15 +208,10 @@ int console_init(const console_config_t *config)
     s_con.task_stack_size = cfg.task_stack_size;
     s_con.task_priority = cfg.task_priority;
 
-    usb_serial_jtag_driver_config_t usb_config = {
-        .tx_buffer_size = cfg.tx_buffer_size,
-        .rx_buffer_size = cfg.rx_buffer_size,
-    };
-    if (usb_serial_jtag_driver_install(&usb_config) != ESP_OK) {
+    if (io_driver_install(cfg.tx_buffer_size, cfg.rx_buffer_size) != ESP_OK) {
         free(s_con.line_buffer);
         return -3;
     }
-    usb_serial_jtag_vfs_use_driver();
 
     console_register_cmd("help", cmd_help, "show this help");
     s_con.initialized = true;
