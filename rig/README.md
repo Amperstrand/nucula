@@ -91,6 +91,34 @@ only when everything else (image, atom session) is already set up.
   the RC522 and the ACR shields the emulated tag completely (the
   reader happily selects the boltcard instead).
 
+## Relay e2e runbook
+
+The live money loop (one command once the rig is set up):
+
+```bash
+cargo test --features live,payer --test e2e -- --ignored --nocapture
+```
+
+Preconditions:
+
+1. **Mint up on its LAN bind** — `/tmp/opencode/rig/start-mint.sh`
+   (adapter `0.0.0.0:3338`, FakeWallet, shared-cargo-cache paths).
+   The token embeds `http://192.168.13.221:3338`; the atom must be on
+   the same LAN (it joins the lab AP automatically).
+2. **A writable blank boltcard on the atom's antenna**, within reach
+   of the ACR's antenna too (sandwiched; the write goes through the
+   ACR's field while the atom's stays off — the firmware gates the
+   RC522 antenna to sessions only).
+3. **The ACR freshly powered** — if it was wedged (see above), replug
+   it; there is no software reset.
+
+The flow: cdk payer mints 1 sat → ACR discovers the card, writes the
+NDEF text record into its NDEF file, readback-verifies, quiets its
+field → the atom's reader session powers its field, reads the card
+over Type 4 / ISO-DEP, extracts the token, swaps it at the mint →
+`redeemed` log + balance on the console. The offline variant asserts
+the stash-then-drain path instead.
+
 ## Rig hardware map (this lab)
 
 | Role | Device | Path |
