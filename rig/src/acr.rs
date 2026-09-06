@@ -148,12 +148,14 @@ impl Acr1252 {
     }
 
     /// Preload a full NDEF image (see [`crate::ndef_t2t`]), verify by
-    /// readback, then enter emulation. Restores factory reader
-    /// settings first: NVM settings survive replugs and muted tag
-    /// types also mute the emulation.
+    /// readback, then enter emulation. Tag types stay enabled (muted
+    /// types mute the emulation too), but auto-polling is QUIETED
+    /// first: a mode-switch escape racing an in-flight poll cycle is
+    /// what wedges the firmware's CCID loop (see README), and NVM
+    /// settings survive replugs.
     pub fn present_ndef_image(&mut self, image: &[u8]) -> Result<(), AcrError> {
         self.set_picc_operating_parameter(0xFF)?;
-        self.set_auto_polling(0x8F)?;
+        self.set_auto_polling(0x00)?; // quiet BEFORE any mode switch
         self.exit_card_emulation()?;
         for (off, chunk) in image.chunks(48).enumerate() {
             self.write_ce_data((off * 48) as u8, chunk)?;
