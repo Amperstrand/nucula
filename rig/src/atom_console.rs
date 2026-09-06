@@ -43,26 +43,44 @@ pub struct AtomConsole {
 
 impl AtomConsole {
     pub fn open(path: &str) -> Result<Self, ConsoleError> {
-        let port = serialport::new(path, 115_200)
+        let mut port = serialport::new(path, 115_200)
             .timeout(Duration::from_millis(100))
             .open()
             .map_err(|e| ConsoleError::Open(format!("{path}: {e}")))?;
+        // CP210x auto-reset wiring (probe-verified in
+        // tests/e2e.rs::console_line_probe): DTR low pulses EN, and the
+        // open can land the control lines in a reset-holding state.
+        // Drive the proven-alive combination and let it settle.
+        port.write_data_terminal_ready(true)
+            .map_err(|e| ConsoleError::Open(format!("{path}: dtr: {e}")))?;
+        port.write_request_to_send(true)
+            .map_err(|e| ConsoleError::Open(format!("{path}: rts: {e}")))?;
+        std::thread::sleep(Duration::from_millis(300));
         let mut con = Self { port };
-        // Wake the prompt; discard whatever was buffered.
-        let _ = con.cmd("");
+        // Wake the prompt; a line transition may have reset the board,
+        // so retry once if the first sync lands mid-boot.
+        if con.cmd("").is_err() {
+            std::thread::sleep(Duration::from_millis(500));
+            con.cmd("")?;
+        }
         Ok(con)
     }
 
     /// Send a console line and read until the prompt re-appears.
+    ///
+    /// Exactly one prompt-sync: write_line already reads to the first
+    /// prompt. (A bare CR LF yields two prompts — CR and LF each
+    /// terminate a line — which masked a duplicate second read here:
+    /// real commands emit exactly one prompt, and waiting for a second
+    /// starved every non-empty cmd.)
     pub fn cmd(&mut self, line: &str) -> Result<String, ConsoleError> {
-        let out = self.write_line(line)?;
-        self.read_until(PROMPT, Duration::from_secs(10))?;
-        Ok(out)
+        self.write_line(line)
     }
 
     fn write_line(&mut self, line: &str) -> Result<String, ConsoleError> {
         self.port
             .write_all(format!("{line}\r\n").as_bytes())?;
+        self.port.flush()?;
         self.read_until(PROMPT, Duration::from_secs(10))
     }
 
