@@ -107,6 +107,12 @@ impl Acr1252 {
         Ok(p.first().copied().unwrap_or(0))
     }
 
+    /// NEVER CALL: this mode-switch escape wedged the CCID loop in
+    /// every observed state — from inside CE mode and from a fresh
+    /// reader — and only a physical replug recovers it (see AGENTS.md
+    /// "The ACR1252U wedge"). Kept only to document the command: a
+    /// fresh reader needs no exit, and one stuck in CE needs a replug
+    /// regardless.
     pub fn exit_card_emulation(&mut self) -> Result<(), AcrError> {
         self.escape(&[0xE0, 0x00, 0x00, 0x40, 0x03, 0x00, 0x00, 0x00])?;
         Ok(())
@@ -118,8 +124,15 @@ impl Acr1252 {
     pub fn write_ce_data(&mut self, start: u8, data: &[u8]) -> Result<(), AcrError> {
         let mut cmd = Vec::with_capacity(data.len() + 9);
         cmd.extend_from_slice(&[
-            0xE0, 0x00, 0x00, 0x60, (data.len() + 4) as u8, 0x01,
-            NFC_MODE_ULTRALIGHT, start, data.len() as u8,
+            0xE0,
+            0x00,
+            0x00,
+            0x60,
+            (data.len() + 4) as u8,
+            0x01,
+            NFC_MODE_ULTRALIGHT,
+            start,
+            data.len() as u8,
         ]);
         cmd.extend_from_slice(data);
         self.escape(&cmd)?;
@@ -128,8 +141,15 @@ impl Acr1252 {
 
     pub fn read_ce_data(&mut self, start: u8, len: u8) -> Result<Vec<u8>, AcrError> {
         let p = self.escape(&[
-            0xE0, 0x00, 0x00, 0x60, 0x04, 0x00,
-            NFC_MODE_ULTRALIGHT, start, len,
+            0xE0,
+            0x00,
+            0x00,
+            0x60,
+            0x04,
+            0x00,
+            NFC_MODE_ULTRALIGHT,
+            start,
+            len,
         ])?;
         Ok(p)
     }
@@ -142,31 +162,37 @@ impl Acr1252 {
     /// to run the whole CE scenario.
     pub fn enter_ultralight_emulation(&mut self) -> Result<(), AcrError> {
         self.escape(&[
-            0xE0, 0x00, 0x00, 0x40, 0x03, NFC_MODE_ULTRALIGHT, 0x00, 0x00,
+            0xE0,
+            0x00,
+            0x00,
+            0x40,
+            0x03,
+            NFC_MODE_ULTRALIGHT,
+            0x00,
+            0x00,
         ])?;
         Ok(())
     }
 
     /// Preload a full NDEF image (see [`crate::ndef_t2t`]), verify by
-    /// readback, then enter emulation. Tag types stay enabled (muted
-    /// types mute the emulation too), but auto-polling is QUIETED
-    /// first: a mode-switch escape racing an in-flight poll cycle is
-    /// what wedges the firmware's CCID loop (see README), and NVM
-    /// settings survive replugs.
+    /// readback, then enter emulation. Exactly the proven-safe manual
+    /// sequence (see AGENTS.md "The ACR1252U wedge"): quiet polling,
+    /// write, verify, enter ONCE — no `exit_card_emulation`, no
+    /// `set_picc_operating_parameter`; both were present in every run
+    /// that wedged the reader, and absent from the one that worked.
     pub fn present_ndef_image(&mut self, image: &[u8]) -> Result<(), AcrError> {
-        self.set_picc_operating_parameter(0xFF)?;
         self.set_auto_polling(0x00)?; // quiet BEFORE any mode switch
-        // ...and let the quiet beat the next poll cycle before a mode
-        // switch goes out: an exit raced an in-flight poll exactly once
-        // (the rig preflight had just restored polling 0x8F) and wedged
-        // the CCID loop until a physical replug.
+                                      // ...and let the quiet beat the next poll cycle before the
+                                      // writes and the enter escape go out (an in-flight poll racing
+                                      // a mode switch is one documented wedge variant).
         std::thread::sleep(std::time::Duration::from_millis(1000));
-        self.exit_card_emulation()?;
         for (off, chunk) in image.chunks(48).enumerate() {
             self.write_ce_data((off * 48) as u8, chunk)?;
         }
         let head = self.read_ce_data(0, 48)?;
-        if head.len() < image.len().min(16) || head[..image.len().min(16)] != image[..image.len().min(16)] {
+        if head.len() < image.len().min(16)
+            || head[..image.len().min(16)] != image[..image.len().min(16)]
+        {
             return Err(AcrError::ReadbackMismatch(head));
         }
         self.enter_ultralight_emulation()
@@ -184,12 +210,18 @@ use pcsc::Disposition;
 #[derive(Debug)]
 pub enum CardError {
     NoCard(String),
-    Apdu { cmd: &'static str, sw: u16 },
+    Apdu {
+        cmd: &'static str,
+        sw: u16,
+    },
     Pcsc(pcsc::Error),
     BadCc,
     /// The token's NDEF file exceeds the card's declared capacity —
     /// not fixable in software; use a bigger-NDEF carrier.
-    Capacity { need: usize, have: usize },
+    Capacity {
+        need: usize,
+        have: usize,
+    },
 }
 
 impl fmt::Display for CardError {
@@ -269,8 +301,7 @@ impl Acr1252Card {
     /// verify by readback.
     pub fn write_ndef(&mut self, ndef_message: &[u8]) -> Result<(), CardError> {
         const SEL_APP: &[u8] = &[
-            0x00, 0xA4, 0x04, 0x00, 0x07,
-            0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01, 0x00,
+            0x00, 0xA4, 0x04, 0x00, 0x07, 0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01, 0x00,
         ];
         const SEL_CC: &[u8] = &[0x00, 0xA4, 0x00, 0x0C, 0x02, 0xE1, 0x03];
         const READ_CC: &[u8] = &[0x00, 0xB0, 0x00, 0x00, 0x0F];
@@ -287,14 +318,25 @@ impl Acr1252Card {
         if let Some(cap) = cc_ndef_capacity(&cc) {
             let need = ndef_message.len() + 2; // NLEN + message
             if need > cap as usize {
-                return Err(CardError::Capacity { need, have: cap as usize });
+                return Err(CardError::Capacity {
+                    need,
+                    have: cap as usize,
+                });
             }
         }
         let fid: u16 = 0xE104;
         let sel_file = [0x00, 0xA4, 0x00, 0x0C, 0x02, (fid >> 8) as u8, fid as u8];
         if self.apdu("select NDEF file", &sel_file).is_err() {
             let cc_fid = ((cc[7] as u16) << 8) | cc[8] as u16;
-            let fallback = [0x00, 0xA4, 0x00, 0x0C, 0x02, (cc_fid >> 8) as u8, cc_fid as u8];
+            let fallback = [
+                0x00,
+                0xA4,
+                0x00,
+                0x0C,
+                0x02,
+                (cc_fid >> 8) as u8,
+                cc_fid as u8,
+            ];
             self.apdu("select NDEF file", &fallback)?;
         }
 
@@ -316,7 +358,10 @@ impl Acr1252Card {
         let rd = [0x00, 0xB0, 0x00, 0x00, 0x02];
         let nlen = self.apdu("verify NLEN", &rd)?;
         if nlen != (ndef_message.len() as u16).to_be_bytes() {
-            return Err(CardError::Apdu { cmd: "verify NLEN", sw: 0xDEAD });
+            return Err(CardError::Apdu {
+                cmd: "verify NLEN",
+                sw: 0xDEAD,
+            });
         }
         Ok(())
     }
