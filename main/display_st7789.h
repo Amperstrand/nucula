@@ -22,6 +22,10 @@ void display_st7789_set_pixel(int x, int y, uint16_t color);
 void display_st7789_fill_rect(int x, int y, int w, int h, uint16_t color);
 void display_st7789_backlight(bool on);
 
+// Grove rail (MFRC522 power) control via AXP192 EXTEN — used to clear
+// a latched RC522 that SCL clocking cannot recover.
+esp_err_t axp192_grove_power(bool on);
+
 #ifdef __cplusplus
 }
 #endif

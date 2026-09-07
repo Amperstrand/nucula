@@ -151,6 +151,48 @@ static esp_err_t axp192_power_enable(void)
     return err;
 }
 
+// EXTEN (reg 0x10 bit 2) gates the Grove rail that powers the MFRC522.
+// The PMU holds this rail across ESP32 resets, so a latched RC522
+// (SDA stuck LOW, immune to SCL clocking) only clears when the rail
+// actually drops — hence this power-cycle helper.
+esp_err_t axp192_grove_power(bool on)
+{
+    i2c_master_bus_config_t bus_cfg = {
+        .i2c_port          = I2C_NUM_1,
+        .sda_io_num        = BOARD_PMU_SDA_PIN,
+        .scl_io_num        = BOARD_PMU_SCL_PIN,
+        .clk_source        = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    i2c_master_bus_handle_t bus = NULL;
+    esp_err_t err = i2c_new_master_bus(&bus_cfg, &bus);
+    if (err != ESP_OK)
+        return err;
+
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address  = BOARD_PMU_ADDR,
+        .scl_speed_hz    = 400000,
+    };
+    i2c_master_dev_handle_t dev = NULL;
+    err = i2c_master_bus_add_device(bus, &dev_cfg, &dev);
+    if (err == ESP_OK) {
+        uint8_t reg = 0x10, cur = 0;
+        err = i2c_master_transmit_receive(dev, &reg, 1, &cur, 1, 100);
+        if (err == ESP_OK) {
+            uint8_t want = on ? (uint8_t)(cur | 0x04)
+                              : (uint8_t)(cur & ~0x04);
+            if (want != cur)
+                err = axp_write(dev, 0x10, want);
+        }
+    }
+    if (dev)
+        i2c_master_bus_rm_device(dev);
+    i2c_del_master_bus(bus);
+    return err;
+}
+
 esp_err_t display_st7789_init(void)
 {
     if (s_spi)

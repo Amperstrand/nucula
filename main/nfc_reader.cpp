@@ -14,6 +14,7 @@
 #include "nfc.hpp"
 #include "task_config.h"
 #include "board.h"
+#include "display_st7789.h"
 #include "ndef.hpp"
 #include "nfc_common.h"
 #include "wallet.hpp"
@@ -378,6 +379,15 @@ bool nfc_init(i2c_master_bus_handle_t bus)
             // Chip present but unresponsive; a retry may recover it.
         }
         ESP_LOGW(TAG, "MFRC522 setup failed, retrying... (%d left)", retries);
+#if CONFIG_NUCULA_BOARD_M5STICK
+        // The AXP192 holds the Grove rail across ESP32 resets, so a
+        // latched RC522 re-enters its bad state every boot; only a real
+        // rail drop (EXTEN) clears it — SCL clocking proved insufficient.
+        ESP_LOGW(TAG, "power-cycling Grove rail via AXP192 EXTEN");
+        axp192_grove_power(false);
+        vTaskDelay(pdMS_TO_TICKS(200));
+        axp192_grove_power(true);
+#endif
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
