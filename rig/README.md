@@ -39,7 +39,29 @@ cargo test  --features live -- --ignored   # live e2e (ACR + atom)
   card emulation does not radiate at all**. `present_ndef_image`
   restores factory settings (`0xFF` / `0x8F`) before entering CE.
 
-### Token size vs. the emulated area (open question)
+### Carrier capacity (measured, blocking)
+
+The relay boltcard's NDEF file is **256 bytes** — silicon-enforced
+(writes beyond 256 → 6985; the CC itself is locked → 6982). A 1-sat
+DLEQ-bearing cashuB token from the LAN mint produces a 386-byte NDEF
+file; DLEQ (96 B of e/s/r) is mandatory in nucula and cannot be
+trimmed. **No valid token fits this card** — the relay needs an
+NTAG 424 DNA class carrier (816-byte NDEF file). `write_ndef` parses
+the CC's v2.x File Control TLV and fails fast with
+`Capacity { need, have }` before touching the card.
+
+### RF coupling in the sandwich (measured, blocking)
+
+With the RC522 and ACR1252 antennas stacked directly (card between),
+the ACR's large coil absorbs energy from the atom's small one: REQA
+answers near-100% (after the conductance boost), anticollision
+~25/120 s, the 9-byte SELECT **0/75** — all silent timeouts (err=00;
+zero corrupted frames, so no active interference). Separating the
+antennas by a few cm restores the link. The one complete ISO-DEP
+activation (RATS + ATS, fsc=64 fwt=39 ms) proves the entire T4T code
+path works when coupling permits.
+
+### Token size vs. the emulated area (resolved — Ultralight CE is dead)
 
 A 1-sat cashuB token from the local mint — the smallest possible
 hand-off, single proof, DLEQ attached (nucula requires NUT-12) —
