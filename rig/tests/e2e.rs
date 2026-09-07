@@ -86,6 +86,37 @@ async fn relay_token_over_the_air_via_boltcard() {
     eprintln!("{status}");
 }
 
+/// Console-relay e2e: the full money loop minus the RF hop. The payer
+/// mints a real token at the LAN mint and the atom receives it via its
+/// serial console (`receive`) — exercising everything the over-the-air
+/// relay would: V4 token parse, keyset fetch over WiFi, NUT-12-verified
+/// swap at the mint, balance. Run whenever the atom is on serial and
+/// the mint is up; isolates the (physical) RF coupling question from
+/// the wallet correctness question.
+#[cfg(feature = "payer")]
+#[tokio::test]
+#[ignore = "hardware: atom on serial + mint on the LAN bind"]
+async fn console_relay_money_loop() {
+    use nucula_rig::atom_console::AtomConsole;
+    let mint = mint_url();
+    let token = nucula_rig::payer::mint_token(&mint, 1).await.expect("mint");
+
+    let _rig = nucula_rig::rig::RigGuard::acquire().expect("rig");
+    let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
+    let _ = atom.nfc_stop();
+    let out = atom.mint_add(&mint).expect("mint add");
+    assert!(!out.contains("error"), "mint add failed: {out}");
+
+    let recv = atom.cmd(&format!("receive {token}")).expect("receive");
+    eprintln!("{recv}");
+    assert!(recv.contains("swapping"), "receive did not reach the swap: {recv}");
+    assert!(!recv.contains("warning"), "receive warned: {recv}");
+
+    let balance = atom.cmd("balance").expect("balance");
+    eprintln!("{balance}");
+    assert!(balance.contains("1 sat"), "balance missing the received sat: {balance}");
+}
+
 /// Offline relay variant: same hand-off, but the atom is out of AP
 /// range (or the AP is down) after having once fetched the mint's
 /// keysets — the token is stashed, then drained automatically once
