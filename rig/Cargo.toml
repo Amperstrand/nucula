@@ -10,10 +10,11 @@ default = []
 # serial port). Pure-logic unit tests run without this feature.
 live = ["dep:pcsc", "dep:serialport"]
 # cdk-based payer: mints real tokens from a running micronuts-mint.
-payer = ["dep:cdk", "dep:cdk-sqlite", "dep:rand", "dep:tokio"]
+payer = ["dep:cdk", "dep:cdk-sqlite", "dep:rand", "dep:tokio", "dep:base64"]
 
 [dependencies]
 fs2 = "0.4"
+base64 = { version = "0.22", optional = true }
 pcsc = { version = "2.9", optional = true }
 serialport = { version = "4", optional = true }
 cdk = { path = "/home/ubuntu/src/cdk/crates/cdk", optional = true }

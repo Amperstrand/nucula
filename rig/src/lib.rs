@@ -30,3 +30,6 @@ pub fn atom_default_port() -> String {
 
 #[cfg(feature = "payer")]
 pub mod payer;
+
+#[cfg(feature = "payer")]
+pub mod strip;
