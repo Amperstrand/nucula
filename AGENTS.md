@@ -19,11 +19,25 @@ exit escape itself is the trigger.
 **Never call `Acr1252::exit_card_emulation`.** A fresh reader needs no
 exit, and a reader left in CE mode needs a replug anyway.
 
-The ONE proven-safe emulated-tag sequence (this is
-`Acr1252::present_ndef_image`; keep it this shape):
+The quiet→write→verify→enter sequence above is proven ONLY when driven
+manually (python `pyscard`, `T0_protocol` + `DIRECT`, one connection,
+single small write, no preflight). The same bytes from the rig test
+(pcsc crate, `UNDEFINED` + `DIRECT`, preflight connection churn first,
+6×48-byte chunked writes) wedged the reader three times on 2026-09-07 —
+`NotTransacted` at `present_ndef_image` every time. The open suspects,
+narrowed by elimination: connect-protocol difference, preflight
+connection drop/reopen, or the chunked 48-byte write pattern.
+`rig/scripts/acr_instrumented.py` replicates the full failing context
+over the proven transport with per-step logging — run it on the next
+fresh power cycle to isolate the trigger BEFORE burning another e2e
+attempt.
+
+The manual sequence that worked (and which the instrumented script
+replays):
 
 1. quiet auto-polling (`E0 00 00 23 01 00`) — before anything else
-2. write the CE image in ≤48-byte chunks (`E0 00 00 60 …`)
+2. write the CE image — ONE small (~30-byte) write in the manual run;
+   the rig's 6×48-byte chunking is an open wedge suspect
 3. read back and verify
 4. enter emulation ONCE (`E0 00 00 40 03 01 00 00`)
 
