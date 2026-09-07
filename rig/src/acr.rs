@@ -25,6 +25,9 @@ pub enum AcrError {
     BadFraming(Vec<u8>),
     /// Card-emulation preload readback did not match the image.
     ReadbackMismatch(Vec<u8>),
+    /// Image content exceeds the single-write CE budget (see
+    /// [`Acr1252::present_ndef_image`]).
+    ImageTooLarge(usize),
     Pcsc(pcsc::Error),
 }
 
@@ -36,6 +39,13 @@ impl fmt::Display for AcrError {
             AcrError::ReadbackMismatch(b) => {
                 write!(f, "CE preload readback mismatch: {b:02X?}")
             }
+            AcrError::ImageTooLarge(n) => write!(
+                f,
+                "CE image is {n} bytes after trimming at the NDEF \
+                 terminator; the firmware wedges on sequential CE writes, \
+                 so one write is the budget and Lc caps it at 251 — \
+                 strip the token harder or shrink the NDEF area"
+            ),
             AcrError::Pcsc(e) => write!(f, "pcsc: {e}"),
         }
     }
@@ -174,25 +184,36 @@ impl Acr1252 {
         Ok(())
     }
 
-    /// Preload a full NDEF image (see [`crate::ndef_t2t`]), verify by
-    /// readback, then enter emulation. Exactly the proven-safe manual
-    /// sequence (see AGENTS.md "The ACR1252U wedge"): quiet polling,
-    /// write, verify, enter ONCE — no `exit_card_emulation`, no
-    /// `set_picc_operating_parameter`; both were present in every run
-    /// that wedged the reader, and absent from the one that worked.
+    /// Preload an NDEF image (see [`crate::ndef_t2t`]) and enter
+    /// emulation. Exactly ONE write command carries the image: the
+    /// emulated Type 2 memory is NVM-backed and rapid sequential CE
+    /// writes wedge the firmware's CCID loop — instrumented evidence
+    /// (rig/scripts/acr_instrumented.py): 48-byte writes 1–3 take
+    /// ~142 ms each and apply fully, write 4 returns a SHORT length
+    /// echo (36/48 bytes, silently partial), write 5 kills CCID until
+    /// physical replug. A single write per power cycle never wedged.
+    ///
+    /// The image is trimmed at the NDEF terminator (0xFE) so padded
+    /// builders stay within the one-command budget; 251 bytes is the
+    /// Lc cap. Quiets polling first and lets it settle before the
+    /// enter escape.
     pub fn present_ndef_image(&mut self, image: &[u8]) -> Result<(), AcrError> {
-        self.set_auto_polling(0x00)?; // quiet BEFORE any mode switch
-                                      // ...and let the quiet beat the next poll cycle before the
-                                      // writes and the enter escape go out (an in-flight poll racing
-                                      // a mode switch is one documented wedge variant).
-        std::thread::sleep(std::time::Duration::from_millis(1000));
-        for (off, chunk) in image.chunks(48).enumerate() {
-            self.write_ce_data((off * 48) as u8, chunk)?;
+        let end = image
+            .iter()
+            .rposition(|&b| b == 0xFE)
+            .map(|i| i + 1)
+            .unwrap_or(image.len());
+        if end == 0 || end > 251 {
+            return Err(AcrError::ImageTooLarge(end));
         }
+
+        self.set_auto_polling(0x00)?; // quiet BEFORE any mode switch
+        std::thread::sleep(std::time::Duration::from_millis(1000));
+        self.write_ce_data(0, &image[..end])?;
+
         let head = self.read_ce_data(0, 48)?;
-        if head.len() < image.len().min(16)
-            || head[..image.len().min(16)] != image[..image.len().min(16)]
-        {
+        let n = end.min(48);
+        if head.len() < n || head[..n] != image[..n] {
             return Err(AcrError::ReadbackMismatch(head));
         }
         self.enter_ultralight_emulation()

@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Instrumented ACR1252 CE presentation — replicates the rig e2e's exact
-escape sequence over the proven manual transport, logging every step.
+"""CONFIRMED reproducer for the ACR1252U CE-write wedge (2026-09-07).
 
-Diagnostics for the triple-wedge (see AGENTS.md). Outcomes:
-  - dies at/after the preflight-replication steps -> polling restore or
-    connection churn is the trigger even over python
-  - survives through enter + M5Stick reads the tag -> the delta is the
-    rig transport (pcsc crate connect or control path)
-  - dies at a chunked write -> 48-byte chunk strategy is the trigger
+Phase B's 6x48-byte chunked writes reproduce the firmware bug: writes
+1-3 apply fully (~142 ms each), write 4 partially applies (length echo
+36/48, SW still 9000), write 5 wedges the CCID loop until physical
+replug. Kept as the regression demo for AGENTS.md "The ACR1252U
+wedge"; phase A replicates the rig preflight. Do NOT run it on a
+power cycle you need for a real presentation — it burns the reader.
 """
 import sys, time
 

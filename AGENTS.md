@@ -8,43 +8,32 @@ rig plan on GitHub issue Amperstrand/nucula#1.
 
 ## The ACR1252U wedge — read before touching the reader
 
-The ACR1252U runs CCID and NFC on one MCU. A card-emulation
-**mode-switch escape** (`E0 00 00 40 03 …`) issued in the wrong state
-wedges its CCID loop until the reader is **physically unplugged**. It
-has wedged every rig run that included `exit_card_emulation` — from CE
-mode AND from a fresh post-replug reader — plus the original CE
-experiments. A 1 s settle after quieting polling does not save it; the
-exit escape itself is the trigger.
+**CONFIRMED TRIGGER (instrumented 2026-09-07): rapid sequential CE-data
+writes.** The emulated Type 2 memory is NVM-backed, and the firmware's
+CCID loop dies on write bursts — `rig/scripts/acr_instrumented.py`
+(the reproducer) showed 48-byte writes 1–3 applying fully at ~142 ms
+each, write 4 returning a SHORT length echo (36/48 bytes — a silently
+partial write, SW still 9000), and write 5 wedging CCID until physical
+replug. One write per power cycle never wedged.
 
-**Never call `Acr1252::exit_card_emulation`.** A fresh reader needs no
-exit, and a reader left in CE mode needs a replug anyway.
+The three earlier e2e burns were blamed on `exit_card_emulation` /
+mode-switch races — **wrong by coincidence**: all three died at chunk
+4–5 of `present_ndef_image`'s old 6×48-byte write loop, whatever
+mode-switch commands surrounded it.
 
-The quiet→write→verify→enter sequence above is proven ONLY when driven
-manually (python `pyscard`, `T0_protocol` + `DIRECT`, one connection,
-single small write, no preflight). The same bytes from the rig test
-(pcsc crate, `UNDEFINED` + `DIRECT`, preflight connection churn first,
-6×48-byte chunked writes) wedged the reader three times on 2026-09-07 —
-`NotTransacted` at `present_ndef_image` every time. The open suspects,
-narrowed by elimination: connect-protocol difference, preflight
-connection drop/reopen, or the chunked 48-byte write pattern.
-`rig/scripts/acr_instrumented.py` replicates the full failing context
-over the proven transport with per-step logging — run it on the next
-fresh power cycle to isolate the trigger BEFORE burning another e2e
-attempt.
+The rules (enforced in `Acr1252::present_ndef_image`):
 
-The manual sequence that worked (and which the instrumented script
-replays):
-
-1. quiet auto-polling (`E0 00 00 23 01 00`) — before anything else
-2. write the CE image — ONE small (~30-byte) write in the manual run;
-   the rig's 6×48-byte chunking is an open wedge suspect
+1. quiet auto-polling (`E0 00 00 23 01 00`) and let it settle 1 s
+2. **ONE write command** — trimmed at the NDEF terminator (0xFE),
+   ≤ 251 data bytes (the Lc is one byte). No chunked write loops, ever
 3. read back and verify
 4. enter emulation ONCE (`E0 00 00 40 03 01 00 00`)
 
 That is **one CE scenario per power cycle** — after the scenario, replug
-before the next. `set_picc_operating_parameter` inside a CE flow is also
-suspect (present in both wedged runs, absent from the working one);
-don't re-add it without a replug available to burn.
+before the next. Don't call `exit_card_emulation` (never was the
+trigger, but a fresh reader needs no exit and a CE-stuck one needs a
+replug anyway), and don't re-add `set_picc_operating_parameter` to CE
+flows — neither is proven harmful, both are unproven-free.
 
 Wedged signature: `Pcsc(NotTransacted)` from an escape, then "Reader is
 unavailable". None of these revive it (all tried 2026-09-07): pcscd
@@ -53,8 +42,12 @@ reset, `set_configuration`, the SAM interface. Physical replug only.
 
 Auto-polling is NVM-backed — it survives replugs holding whatever was
 last set. `RigGuard::acquire()`'s preflight restores factory polling
-(0x8F) for reader-mode tests; any CE flow after a preflight must
-re-quiet polling before its mode switch (present_ndef_image does).
+(0x8F) for reader-mode tests; any CE flow after a preflight re-quiets
+polling first (present_ndef_image does).
+
+Command semantics reference: ACR1552U Series Reference Manual §6.1.15
+(same escape family) — the write response echoes the ACTUAL written
+length, so a short echo means a partial write even with SW 9000.
 
 ## Other rig gotchas (learned the hard way, same day)
 
