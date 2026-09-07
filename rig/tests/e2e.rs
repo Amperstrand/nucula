@@ -28,8 +28,7 @@ fn atom_port() -> String {
 }
 
 fn mint_url() -> String {
-    std::env::var("MINT_URL")
-        .unwrap_or_else(|_| nucula_rig::rig::DEFAULT_RELAY_MINT.into())
+    std::env::var("MINT_URL").unwrap_or_else(|_| nucula_rig::rig::DEFAULT_RELAY_MINT.into())
 }
 
 /// Rust serial-driver smoke: open the atom console and round-trip a
@@ -40,7 +39,10 @@ fn atom_console_smoke() {
     let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
     let status = atom.status().expect("status");
     eprintln!("{status}");
-    assert!(status.contains("nucula>") || status.contains("nfc:"), "no status output");
+    assert!(
+        status.contains("nucula>") || status.contains("nfc:"),
+        "no status output"
+    );
 }
 
 /// Relay e2e: the payer mints 1 sat at the LAN mint, the ACR1252
@@ -145,12 +147,18 @@ async fn console_relay_money_loop() {
 
     let recv = atom.cmd(&format!("receive {token}")).expect("receive");
     eprintln!("{recv}");
-    assert!(recv.contains("swapping"), "receive did not reach the swap: {recv}");
+    assert!(
+        recv.contains("swapping"),
+        "receive did not reach the swap: {recv}"
+    );
     assert!(!recv.contains("warning"), "receive warned: {recv}");
 
     let balance = atom.cmd("balance").expect("balance");
     eprintln!("{balance}");
-    assert!(balance.contains("1 sat"), "balance missing the received sat: {balance}");
+    assert!(
+        balance.contains("1 sat"),
+        "balance missing the received sat: {balance}"
+    );
 }
 
 /// ACR-as-tag relay e2e: the payer mints 1 sat at the LAN mint, the
@@ -167,9 +175,12 @@ async fn relay_acr_emulated() {
     let mint = mint_url();
     let token = nucula_rig::payer::mint_token(&mint, 1).await.expect("mint");
     let stripped = nucula_rig::strip::strip_dleq(&token).expect("dleq strip");
-    eprintln!("token: {} chars -> {} after dleq strip", token.len(), stripped.len());
-    let image =
-        nucula_rig::ndef_t2t::build_ndef_text_image(&stripped, 256).expect("ndef image");
+    eprintln!(
+        "token: {} chars -> {} after dleq strip",
+        token.len(),
+        stripped.len()
+    );
+    let image = nucula_rig::ndef_t2t::build_ndef_text_image(&stripped, 256).expect("ndef image");
     eprintln!("ndef image: {} bytes", image.len());
 
     let _rig = nucula_rig::rig::RigGuard::acquire().expect("rig");
@@ -198,7 +209,11 @@ async fn relay_acr_emulated() {
     let balance = atom.cmd("balance").expect("balance after");
     eprintln!("{balance}");
     let after = sat_total(&balance);
-    assert_eq!(after, before + 1, "balance did not gain the relayed sat: {balance}");
+    assert_eq!(
+        after,
+        before + 1,
+        "balance did not gain the relayed sat: {balance}"
+    );
 }
 
 /// Sum the "N sat" amounts in a `balance` command's output.
@@ -279,8 +294,11 @@ fn console_line_probe() {
                 Err(_) => break,
             }
         }
-        eprintln!("dtr={dtr} rts={rts} -> {} bytes: {:?}",
-                  got.len(), String::from_utf8_lossy(&got));
+        eprintln!(
+            "dtr={dtr} rts={rts} -> {} bytes: {:?}",
+            got.len(),
+            String::from_utf8_lossy(&got)
+        );
         drop(p);
         std::thread::sleep(Duration::from_millis(300));
     }

@@ -8,8 +8,8 @@
 //! - e2e tests (`tests/`, `live` feature): drive the ACR and the atom
 //!   console over serial through a full over-the-air token receive.
 
-pub mod ndef_t2t;
 pub mod locks;
+pub mod ndef_t2t;
 
 #[cfg(feature = "live")]
 pub mod acr;
@@ -33,7 +33,9 @@ pub enum Board {
 impl Board {
     pub fn default_port(&self) -> &'static str {
         match self {
-            Board::Atom => "/dev/serial/by-id/usb-M5STACK_Inc._M5_Serial_Converter_9D529068B4-if00-port0",
+            Board::Atom => {
+                "/dev/serial/by-id/usb-M5STACK_Inc._M5_Serial_Converter_9D529068B4-if00-port0"
+            }
             Board::M5Stick => "/dev/serial/by-id/usb-Hades2001_M5stack_49D6163EBE-if00-port0",
         }
     }

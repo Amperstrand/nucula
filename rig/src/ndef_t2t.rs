@@ -20,10 +20,9 @@ pub enum ImageError {
 impl fmt::Display for ImageError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ImageError::RecordTooLong { needed, area } => write!(
-                f,
-                "NDEF record needs {needed} bytes, area is {area}"
-            ),
+            ImageError::RecordTooLong { needed, area } => {
+                write!(f, "NDEF record needs {needed} bytes, area is {area}")
+            }
         }
     }
 }
@@ -73,7 +72,10 @@ pub fn build_ndef_text_image(text: &str, area: usize) -> Result<Vec<u8>, ImageEr
     tlv.push(0xFE); // terminator TLV
 
     if CC_LEN + tlv.len() > area {
-        return Err(ImageError::RecordTooLong { needed: CC_LEN + tlv.len(), area });
+        return Err(ImageError::RecordTooLong {
+            needed: CC_LEN + tlv.len(),
+            area,
+        });
     }
 
     let mut image = Vec::with_capacity(area);
@@ -202,7 +204,10 @@ mod tests {
             extract_cashu_token("https://x.example/?token=cashuAAq1"),
             Some("cashuAAq1")
         );
-        assert_eq!(extract_cashu_token("junk cashuAZz9 trailing"), Some("cashuAZz9"));
+        assert_eq!(
+            extract_cashu_token("junk cashuAZz9 trailing"),
+            Some("cashuAZz9")
+        );
         assert_eq!(extract_cashu_token("no tokens here"), None);
     }
 

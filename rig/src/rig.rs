@@ -89,13 +89,21 @@ pub fn preflight(repair: bool) -> PreflightReport {
     match AtomConsole::open(&port) {
         Ok(mut atom) => match atom.status() {
             Ok(status) => {
-                let nfc_busy = !status.contains("nfc:     idle") && !status.contains("nfc:     off");
+                let nfc_busy =
+                    !status.contains("nfc:     idle") && !status.contains("nfc:     off");
                 if nfc_busy && repair {
                     let _ = atom.nfc_stop();
                     r.atom_repaired = Some("stale reader session stopped");
                 }
-                let wifi = if status.contains("connected") { "wifi up" } else { "wifi DOWN" };
-                r.atom = format!("console up, {wifi}{}", if nfc_busy { ", session was live" } else { "" });
+                let wifi = if status.contains("connected") {
+                    "wifi up"
+                } else {
+                    "wifi DOWN"
+                };
+                r.atom = format!(
+                    "console up, {wifi}{}",
+                    if nfc_busy { ", session was live" } else { "" }
+                );
             }
             Err(e) => r.atom = format!("console open but status failed: {e}"),
         },
@@ -131,10 +139,9 @@ impl RigGuard {
         let labgrid_held = labgrid("acquire");
         // Locks: always. Machine-wide convention covers non-labgrid
         // users; labgrid covers cross-host users of the coordinator.
-        let acr_lock =
-            DeviceLock::acquire("acr1252").map_err(|e| format!("preflight: {e}"))?;
-        let atom_lock = DeviceLock::acquire("atom-9d529068b4")
-            .map_err(|e| format!("preflight: {e}"))?;
+        let acr_lock = DeviceLock::acquire("acr1252").map_err(|e| format!("preflight: {e}"))?;
+        let atom_lock =
+            DeviceLock::acquire("atom-9d529068b4").map_err(|e| format!("preflight: {e}"))?;
         let mut report = preflight(true);
         report.lock_mode = if labgrid_held {
             "labgrid place + flock"
@@ -173,6 +180,10 @@ mod tests {
     fn preflight_report_readonly() {
         let r = super::preflight(false);
         eprintln!("{r}");
-        assert!(r.acr.contains("up") || r.acr.contains("replug"), "acr: {}", r.acr);
+        assert!(
+            r.acr.contains("up") || r.acr.contains("replug"),
+            "acr: {}",
+            r.acr
+        );
     }
 }

@@ -30,7 +30,11 @@ impl fmt::Display for LockHeld {
             f,
             "device '{}' is locked by another session ({})",
             self.name,
-            if self.holder.is_empty() { "unknown holder".to_string() } else { self.helder() }
+            if self.holder.is_empty() {
+                "unknown holder".to_string()
+            } else {
+                self.helder()
+            }
         )
     }
 }
@@ -72,11 +76,17 @@ impl DeviceLock {
                 .unwrap_or_default()
                 .trim()
                 .to_string();
-            return Err(LockHeld { name: name.to_string(), holder });
+            return Err(LockHeld {
+                name: name.to_string(),
+                holder,
+            });
         }
         // Best-effort holder info for conflict diagnostics.
         let _ = fs::write(&path, format!("pid={}\n", std::process::id()));
-        Ok(DeviceLock { file, _name: name.to_string() })
+        Ok(DeviceLock {
+            file,
+            _name: name.to_string(),
+        })
     }
 }
 

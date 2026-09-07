@@ -78,8 +78,7 @@ impl AtomConsole {
     }
 
     fn write_line(&mut self, line: &str) -> Result<String, ConsoleError> {
-        self.port
-            .write_all(format!("{line}\r\n").as_bytes())?;
+        self.port.write_all(format!("{line}\r\n").as_bytes())?;
         self.port.flush()?;
         self.read_until(PROMPT, Duration::from_secs(10))
     }
@@ -133,7 +132,11 @@ impl AtomConsole {
 
     /// Wait for a log line containing `pattern` (log output arrives
     /// outside the prompt cadence; use for nfc task events).
-    pub fn wait_for_log(&mut self, pattern: &str, timeout: Duration) -> Result<String, ConsoleError> {
+    pub fn wait_for_log(
+        &mut self,
+        pattern: &str,
+        timeout: Duration,
+    ) -> Result<String, ConsoleError> {
         self.read_until(pattern, timeout)
     }
 }

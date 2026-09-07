@@ -79,7 +79,11 @@ mod tests {
         let token = crate::payer::mint_token(&mint_base(), 21)
             .await
             .expect("mint flow");
-        eprintln!("token ({} bytes): {}", token.len(), &token[..token.len().min(120)]);
+        eprintln!(
+            "token ({} bytes): {}",
+            token.len(),
+            &token[..token.len().min(120)]
+        );
         assert!(
             token.starts_with("cashuA") || token.starts_with("cashuB"),
             "unexpected token prefix: {:?}",
