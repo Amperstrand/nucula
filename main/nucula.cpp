@@ -195,12 +195,13 @@ extern "C" void app_main(void)
         ESP_LOGW(TAG, "NFC frontend init failed, NFC disabled");
 
 #if CONFIG_NUCULA_BOARD_M5STICK
-    // M5Stick extras: the AXP192-gated ST7789 panel and the two board
-    // buttons. Late in the boot order on purpose — a PMU or panel
-    // failure must not take the console + wallet down with it.
+    // Panel output DISABLED pending a dedicated session: pressing a
+    // button blanks the glass (pin map verified, button driver is
+    // passive-poll — suspect mechanical/PMU; see GitHub issue #1,
+    // Session 3). Init still runs because it sequences the AXP192
+    // rails the Grove port (MFRC522) depends on; backlight stays off.
     if (display_st7789_init() == ESP_OK) {
-        display_st7789_fill(0x0000); // black
-        display_st7789_backlight(true);
+        display_st7789_backlight(false);
     } else {
         ESP_LOGW(TAG, "ST7789 init failed, display disabled");
     }
