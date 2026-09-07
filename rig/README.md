@@ -119,6 +119,33 @@ over Type 4 / ISO-DEP, extracts the token, swaps it at the mint →
 `redeemed` log + balance on the console. The offline variant asserts
 the stash-then-drain path instead.
 
+### Locking, preflight, teardown (cross-project)
+
+The rig devices are shared across Amperstrand projects (bolty HIL uses
+this ACR1252; the microfips bench registered the atoms). Coordination:
+
+- **Primary: the shared labgrid coordinator** (`192.168.13.221:20408`,
+  running as `labgrid-coordinator.service`). The `nucula-rig` place
+  (`labgrid/nucula-place.sh`, idempotent) matches resources that
+  already exist — `ai-legion-small-microfips/atom-b-serial` (the atom
+  token) and `ai-legion-small/acr1252` (bolty's ACR token) — so
+  acquiring it excludes BOTH projects from the same hardware. No new
+  exporter: reuse beats duplication.
+- **Fallback: machine-wide flocks** (`/tmp/amperstrand-rig/<device>.lock`)
+  for when the coordinator is unreachable; taken alongside labgrid
+  when it is, so a mid-run coordinator crash cannot silently drop
+  exclusivity.
+- **Preflight** (`rig::preflight`) checks device state and repairs
+  what is safe: ACR auto-polling restored if a crashed run left it
+  quieted (NVM persists across replugs), stale atom reader sessions
+  stopped, mint reachability reported. It never touches NFC
+  mode-switch escapes (the firmware wedge). `RigGuard::acquire()` =
+  locks + preflight; its `Drop` = teardown (polling restored, session
+  stopped, place released) — even on failed assertions.
+- Stale labgrid holds happen (a `microfips-bench` acquire from
+  2026-09-04 sat for three days): `labgrid-client who` reveals them;
+  this rig found and released one during bring-up.
+
 ### Leaving a card in the rig (interference)
 
 Electrically, a card parked in the sandwich is inert: the atom's

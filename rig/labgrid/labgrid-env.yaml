@@ -1,0 +1,16 @@
+# Labgrid environment for the nucula atom rig. The place matches
+# resources that ALREADY exist on the shared coordinator — no new
+# exporter: the atom token comes from the microfips bench
+# (ai-legion-small-microfips/atom-b-serial) and the ACR1252 from the
+# bolty rig (ai-legion-small/acr1252). Acquiring this place therefore
+# excludes BOTH other projects from the same hardware.
+#
+#   pytest --lg-env rig/labgrid/labgrid-env.yaml --lg-coordinator 192.168.13.221:20408
+imports:
+  - labgrid_resources.py
+targets:
+  main:
+    role: nucula-rig
+    resources:
+      RemotePlace:
+        name: nucula-rig

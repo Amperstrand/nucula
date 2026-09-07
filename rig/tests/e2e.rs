@@ -23,18 +23,13 @@ use std::time::Duration;
 use nucula_rig::acr::Acr1252;
 use nucula_rig::atom_console::AtomConsole;
 
-const DEFAULT_ATOM_PORT: &str =
-    "/dev/serial/by-id/usb-M5STACK_Inc._M5_Serial_Converter_9D529068B4-if00-port0";
-/// The relay default: the mint's LAN bind — the atom must reach the
-/// URL embedded in its tokens.
-const DEFAULT_RELAY_MINT: &str = "http://192.168.13.221:3338";
-
 fn atom_port() -> String {
-    std::env::var("ATOM_PORT").unwrap_or_else(|_| DEFAULT_ATOM_PORT.into())
+    nucula_rig::atom_default_port()
 }
 
 fn mint_url() -> String {
-    std::env::var("MINT_URL").unwrap_or_else(|_| DEFAULT_RELAY_MINT.into())
+    std::env::var("MINT_URL")
+        .unwrap_or_else(|_| nucula_rig::rig::DEFAULT_RELAY_MINT.into())
 }
 
 /// Rust serial-driver smoke: open the atom console and round-trip a
@@ -60,6 +55,9 @@ async fn relay_token_over_the_air_via_boltcard() {
 
     let token = nucula_rig::payer::mint_token(&mint, 1).await.expect("mint");
     assert!(token.starts_with("cashuA") || token.starts_with("cashuB"));
+    // Cross-project rig lock + preflight (repairs state) + teardown.
+    let _rig = nucula_rig::rig::RigGuard::acquire().expect("rig");
+    eprintln!("{}", _rig.report);
 
     // ACR writes the relay card, then quiets its field for the atom.
     {
@@ -74,9 +72,6 @@ async fn relay_token_over_the_air_via_boltcard() {
         let mut acr = Acr1252::open().expect("ACR direct");
         acr.set_auto_polling(0x00).expect("polling off");
     }
-    // Restores polling (0x8F) on drop — even on a failed assertion.
-    let _polling_guard = nucula_rig::acr::PollingRestoreOnDrop;
-
     let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
     let _ = atom.nfc_stop();
     let out = atom.mint_add(&mint).expect("mint add");
@@ -101,6 +96,9 @@ async fn relay_token_over_the_air_via_boltcard() {
 async fn relay_stashes_offline_then_drains_on_reconnect() {
     let mint = mint_url();
     let token = nucula_rig::payer::mint_token(&mint, 1).await.expect("mint");
+    // Cross-project rig lock + preflight (repairs state) + teardown.
+    let _rig = nucula_rig::rig::RigGuard::acquire().expect("rig");
+    eprintln!("{}", _rig.report);
 
     {
         let mut acr = Acr1252::open().expect("ACR direct");
@@ -114,8 +112,6 @@ async fn relay_stashes_offline_then_drains_on_reconnect() {
         let mut acr = Acr1252::open().expect("ACR direct");
         acr.set_auto_polling(0x00).expect("polling off");
     }
-    let _polling_guard = nucula_rig::acr::PollingRestoreOnDrop;
-
     let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
     let _ = atom.nfc_stop();
     atom.nfc_request(1).expect("nfc request");
