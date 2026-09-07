@@ -1,6 +1,8 @@
 #include "sdkconfig.h"
 
-#if !CONFIG_NUCULA_BOARD_ATOM
+// Card-emulation frontend for boards with a PN7160. The reader-mode
+// boards (Atom, M5Stick + MFRC522) use nfc_reader.cpp instead.
+#if !CONFIG_NUCULA_BOARD_ATOM && !CONFIG_NUCULA_BOARD_M5STICK
 
 #include "nfc.hpp"
 #include "task_config.h"
@@ -341,4 +343,4 @@ const char *nfc_status_str()
     return "?";
 }
 
-#endif // !CONFIG_NUCULA_BOARD_ATOM
+#endif // !CONFIG_NUCULA_BOARD_ATOM && !CONFIG_NUCULA_BOARD_M5STICK

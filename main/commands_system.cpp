@@ -13,6 +13,8 @@
 #include "nfc.hpp"
 #include "keypad.h"
 #include "display.h"
+#include "display_st7789.h"
+#include "button.h"
 #include "ui.h"
 
 #include <cstdio>
@@ -429,6 +431,56 @@ static void cmd_i2crecover(const char *arg)
     console_print("reboot before using the bus again\r\n");
 }
 
+// -------------------------------------------------------------------------
+// M5Stick display + buttons
+// -------------------------------------------------------------------------
+
+#if CONFIG_NUCULA_BOARD_M5STICK
+static void cmd_display(const char *arg)
+{
+    if (arg && strcmp(arg, "on") == 0) {
+        display_st7789_backlight(true);
+        console_print("backlight on\r\n");
+    } else if (arg && strcmp(arg, "off") == 0) {
+        display_st7789_backlight(false);
+        console_print("backlight off\r\n");
+    } else if (arg && strncmp(arg, "fill", 4) == 0) {
+        const char *c = arg + 4;
+        while (*c == ' ') c++;
+        unsigned long color = 0xFFFF; // white
+        if (*c == '\0' ||
+            (sscanf(c, "%lx", &color) == 1 && color <= 0xFFFF)) {
+            display_st7789_fill((uint16_t)color);
+            console_printf("filled 0x%04lX\r\n", color);
+        } else {
+            console_print("usage: display <on|off|fill [rgb565-hex]>\r\n");
+        }
+    } else {
+        console_print("usage: display <on|off|fill [rgb565-hex]>\r\n");
+    }
+}
+
+static void cmd_button(const char *arg)
+{
+    (void)arg;
+    console_print("press a button (5s window)...\r\n");
+    int64_t deadline = esp_timer_get_time() + 5LL * 1000000;
+    while (esp_timer_get_time() < deadline) {
+        button_id_t b = button_poll();
+        if (b == BTN_A) {
+            console_print("button: A (front, G37)\r\n");
+            return;
+        }
+        if (b == BTN_B) {
+            console_print("button: B (side, G39)\r\n");
+            return;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    console_print("button: none pressed\r\n");
+}
+#endif
+
 void commands_system_register(void)
 {
     console_register_cmd("nfc",     cmd_nfc,      "nfc [request <amount>|stop]");
@@ -438,6 +490,10 @@ void commands_system_register(void)
 #if CONFIG_NUCULA_BOARD_ATOM
     console_register_cmd("i2cdump", cmd_i2cdump, "i2cdump <sda> <scl> <addr> — dump regs");
     console_register_cmd("nfcdump", cmd_nfcdump, "nfcdump [pages] — dump tag pages");
+#endif
+#if CONFIG_NUCULA_BOARD_M5STICK
+    console_register_cmd("display", cmd_display, "display <on|off|fill [rgb565]>");
+    console_register_cmd("button",  cmd_button,  "button — report a press within 5s");
 #endif
     console_register_cmd("reboot",  cmd_reboot,   "restart the device");
     console_register_cmd("heap",    cmd_heap,     "show heap usage");

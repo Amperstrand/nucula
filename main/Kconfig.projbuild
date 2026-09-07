@@ -4,7 +4,7 @@ menu "Nucula"
         prompt "Target board"
         default NUCULA_BOARD_XIAO
         help
-            Selects the peripheral set and the NFC role. Both boards share
+            Selects the peripheral set and the NFC role. Most boards share
             one I2C bus for all peripherals; every driver probes for its
             device and disables itself when absent.
 
@@ -22,6 +22,12 @@ menu "Nucula"
                 NFC role: the wallet is the READER and receives cashu
                 tokens from a Type 2 NDEF tag (e.g. an ACR1252 in
                 MIFARE Ultralight card-emulation mode, or a real NTAG).
+
+        config NUCULA_BOARD_M5STICK
+            bool "M5StickC Plus + MFRC522 (I2C + ST7789 display)"
+            help
+                M5StickC Plus with an MFRC522 on the Grove I2C port.
+                Adds ST7789 display (135x240) and two buttons (G37/G39).
     endchoice
 
     config NUCULA_SELFTEST_ON_BOOT

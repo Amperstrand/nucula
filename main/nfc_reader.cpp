@@ -1,4 +1,5 @@
-// NFC reader-mode frontend for the M5Stack Atom + MFRC522 board.
+// NFC reader-mode frontend for the MFRC522 boards (M5Stack Atom,
+// M5StickC Plus).
 //
 // Mirrors the PN7160 card-emulation frontend (nfc.cpp) behind the same
 // nfc.hpp API: the user starts a payment session, and instead of waiting
@@ -8,7 +9,7 @@
 
 #include "sdkconfig.h"
 
-#if CONFIG_NUCULA_BOARD_ATOM
+#if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
 
 #include "nfc.hpp"
 #include "task_config.h"
@@ -441,4 +442,4 @@ const char *nfc_status_str()
     return "?";
 }
 
-#endif // CONFIG_NUCULA_BOARD_ATOM
+#endif // CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK

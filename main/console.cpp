@@ -2,7 +2,7 @@
 #include "console.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#if CONFIG_NUCULA_BOARD_ATOM
+#if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
 #include "driver/uart.h"
 #else
 #include "driver/usb_serial_jtag.h"
@@ -13,7 +13,7 @@
 #include <cstdarg>
 #include <vector>
 
-#if CONFIG_NUCULA_BOARD_ATOM
+#if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
 // Classic ESP32 has no USB-serial-JTAG peripheral; the console rides
 // UART0 through the on-board CH340.
 #define CONSOLE_UART_NUM UART_NUM_0

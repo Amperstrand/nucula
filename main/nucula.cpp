@@ -16,6 +16,8 @@
 #include "console.h"
 #include "selftest.hpp"
 #include "display.h"
+#include "display_st7789.h"
+#include "button.h"
 #include "i2c_bus.h"
 #include "nfc.hpp"
 #include "keypad.h"
@@ -191,6 +193,19 @@ extern "C" void app_main(void)
 
     if (!nfc_init(i2c_bus_get()))
         ESP_LOGW(TAG, "NFC frontend init failed, NFC disabled");
+
+#if CONFIG_NUCULA_BOARD_M5STICK
+    // M5Stick extras: the AXP192-gated ST7789 panel and the two board
+    // buttons. Late in the boot order on purpose — a PMU or panel
+    // failure must not take the console + wallet down with it.
+    if (display_st7789_init() == ESP_OK) {
+        display_st7789_fill(0x0000); // black
+        display_st7789_backlight(true);
+    } else {
+        ESP_LOGW(TAG, "ST7789 init failed, display disabled");
+    }
+    button_init();
+#endif
 
     ui_refresh();
 }
