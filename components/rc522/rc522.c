@@ -9,6 +9,8 @@
 #include <string.h>
 
 #include "esp_log.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 #define TAG "rc522"
 
@@ -337,12 +339,24 @@ static bool reqa(uint8_t atqa[2])
 
 bool rc522_poll(rc522_tag_t *out)
 {
-    // ReQA preamble per new_card_present(): restore framing registers
-    // (they change during transceives).
+    // Frontend reset per bolty's prepare_for_activation: antenna off,
+    // framing restore, ModeReg CRC preset, 4x FIFO flush, antenna on,
+    // then gain DB33 (the higher DB48 setting amplifies noise from the
+    // co-located ACR antenna — bolty ships DB33 for a reason). The full
+    // antenna cycle clears marginal front-end states that plain
+    // register writes leave behind.
+    rc522_field(false);
     if (!rc522_wr(RC522_TxModeReg, 0x00) ||
         !rc522_wr(RC522_RxModeReg, 0x00) ||
-        !rc522_wr(RC522_ModWidthReg, 0x26))
+        !rc522_wr(RC522_ModWidthReg, 0x26) ||
+        !rc522_wr(RC522_TxASKReg, 0x40) ||
+        !rc522_wr(RC522_ModeReg, 0x3D))
         return false;
+    for (int i = 0; i < 4; i++)
+        rc522_wr(RC522_FIFOLevelReg, 0x80);
+    rc522_wr(0x26, 0x40); // RFCfgReg: RxGain DB33
+    rc522_field(true);
+    vTaskDelay(1); // tag power-up settle after the field cycle
 
     uint8_t atqa[2];
     if (!reqa(atqa)) {
