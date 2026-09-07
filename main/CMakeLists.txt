@@ -14,7 +14,7 @@ idf_component_register(SRCS ${NUCULA_SRCS} "nfc.cpp" "nfc_reader.cpp"
                     PRIV_REQUIRES rc522 pn7160 log mbedtls esp_timer json cbor esp_wifi esp_event
                                  esp_netif nvs_flash esp_http_client
                                  esp_driver_usb_serial_jtag vfs
-                                 esp_driver_gpio driver)
+                                 esp_driver_gpio driver esp_lcd)
 
 # Hot-path files get -O2 on top of the project-wide -Os.
 set_source_files_properties("crypto.c" "hex.c" "cashu_cbor.cpp"

@@ -1,5 +1,6 @@
-// Minimal ST7789 driver for the M5StickC Plus panel — raw SPI commands,
-// no external display library.
+// ST7789 display for the M5StickC Plus via the IDF esp_lcd panel
+// stack (panel IO + built-in ST7789 driver) — replaces the earlier
+// raw-SPI command driver.
 //
 // Power sequencing note: nothing on this board runs until the AXP192 PMU
 // (I2C1, 0x34) turns its rails on. Register values are cross-checked
@@ -22,80 +23,45 @@
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "driver/i2c_master.h"
+#include "esp_lcd_panel_io.h"
+#include "esp_lcd_io_spi.h"
+#include "esp_lcd_panel_dev.h"
+#include "esp_lcd_panel_st7789.h"
+#include "esp_lcd_panel_ops.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 
 #define TAG "display"
-
-#define ST_CMD_SWRESET 0x01
-#define ST_CMD_SLPOUT   0x11
-#define ST_CMD_NORON    0x13
-#define ST_CMD_INVON    0x21
-#define ST_CMD_DISPON   0x29
-#define ST_CMD_CASET    0x2A
-#define ST_CMD_RASET    0x2B
-#define ST_CMD_RAMWR    0x2C
-#define ST_CMD_MADCTL   0x36
-#define ST_CMD_COLMOD   0x3A
 
 #define LCD_SPI_HOST   SPI2_HOST
 #define LCD_SPI_HZ     (10 * 1000 * 1000) // panel does 20MHz; 10MHz for reliability
 #define LCD_MAX_XFER   (BOARD_LCD_WIDTH * 2) // one 16bpp scanline
 
-static spi_device_handle_t s_spi = NULL;
+static esp_lcd_panel_handle_t s_panel = NULL;
+static SemaphoreHandle_t s_draw_done;
 
-// Command phase (DC low) then optional data phase (DC high).
-static void lcd_cmd(uint8_t cmd, const uint8_t *data, size_t len)
+// draw_bitmap queues its color transfer asynchronously; the panel-IO
+// callback signals completion, which is what keeps the caller's line
+// buffer valid until the SPI engine has consumed it.
+static bool IRAM_ATTR on_draw_done(esp_lcd_panel_io_handle_t io,
+                                   esp_lcd_panel_io_event_data_t *edata,
+                                   void *user_ctx)
 {
-    spi_transaction_t t = {
-        .length = 8,
-        .tx_buffer = &cmd,
-    };
-    gpio_set_level(BOARD_LCD_DC_PIN, 0);
-    spi_device_polling_transmit(s_spi, &t);
-    if (len == 0)
-        return;
-    spi_transaction_t d = {
-        .length = len * 8,
-        .tx_buffer = data,
-    };
-    gpio_set_level(BOARD_LCD_DC_PIN, 1);
-    spi_device_polling_transmit(s_spi, &d);
+    BaseType_t woken = pdFALSE;
+    xSemaphoreGiveFromISR(s_draw_done, &woken);
+    return woken == pdTRUE;
 }
 
-// Address window in panel coordinates — the (52, 40) offset maps the
-// 135x240 window onto this specific glass.
-static void lcd_set_window(int x, int y, int w, int h)
+// One buffer-owning draw: drain any stale completion token, queue the
+// transfer, then wait for its callback. Returns false when the wait
+// times out (queue stall) — callers stop drawing.
+static bool draw_sync(int x0, int y0, int x1, int y1, const void *color)
 {
-    int x0 = x + BOARD_LCD_OFFSET_X;
-    int x1 = x0 + w - 1;
-    int y0 = y + BOARD_LCD_OFFSET_Y;
-    int y1 = y0 + h - 1;
-    uint8_t ca[4] = {
-        (uint8_t)(x0 >> 8), (uint8_t)(x0 & 0xFF),
-        (uint8_t)(x1 >> 8), (uint8_t)(x1 & 0xFF),
-    };
-    uint8_t ra[4] = {
-        (uint8_t)(y0 >> 8), (uint8_t)(y0 & 0xFF),
-        (uint8_t)(y1 >> 8), (uint8_t)(y1 & 0xFF),
-    };
-    lcd_cmd(ST_CMD_CASET, ca, 4);
-    lcd_cmd(ST_CMD_RASET, ra, 4);
-}
-
-// Streams `lines` copies of a prepared scanline after RAMWR. Colors go
-// out MSB first (RGB565 big-endian on the wire).
-static void lcd_stream(const uint8_t *line, int len, int lines)
-{
-    lcd_cmd(ST_CMD_RAMWR, NULL, 0);
-    gpio_set_level(BOARD_LCD_DC_PIN, 1);
-    for (int i = 0; i < lines; i++) {
-        spi_transaction_t t = {
-            .length = len * 8,
-            .tx_buffer = line,
-        };
-        spi_device_polling_transmit(s_spi, &t);
-    }
+    xSemaphoreTake(s_draw_done, 0);
+    if (esp_lcd_panel_draw_bitmap(s_panel, x0, y0, x1, y1, color) != ESP_OK)
+        return false;
+    return xSemaphoreTake(s_draw_done, pdMS_TO_TICKS(100)) == pdTRUE;
 }
 
 // One-shot I2C1 session with the AXP192; the PMU keeps its register
@@ -195,19 +161,18 @@ esp_err_t axp192_grove_power(bool on)
 
 esp_err_t display_st7789_init(void)
 {
-    if (s_spi)
+    if (s_panel)
         return ESP_OK;
 
-    // Keep the backlight dark until the panel is configured.
-    gpio_num_t outs[] = { BOARD_LCD_DC_PIN, BOARD_LCD_RST_PIN, BOARD_LCD_BL_PIN };
-    for (size_t i = 0; i < sizeof(outs) / sizeof(outs[0]); i++) {
-        gpio_config_t io = {
-            .pin_bit_mask = 1ULL << outs[i],
-            .mode = GPIO_MODE_OUTPUT,
-        };
-        gpio_config(&io);
-        gpio_set_level(outs[i], 0);
-    }
+    // Keep the backlight dark until the panel is configured. DC and RST
+    // belong to the esp_lcd panel IO and driver now; only the backlight
+    // stays manual.
+    gpio_config_t bl = {
+        .pin_bit_mask = 1ULL << BOARD_LCD_BL_PIN,
+        .mode = GPIO_MODE_OUTPUT,
+    };
+    gpio_config(&bl);
+    gpio_set_level(BOARD_LCD_BL_PIN, 0);
 
     esp_err_t err = axp192_power_enable();
     if (err != ESP_OK) {
@@ -230,38 +195,55 @@ esp_err_t display_st7789_init(void)
         ESP_LOGE(TAG, "SPI2 bus init failed: %s", esp_err_to_name(err));
         return err;
     }
-    spi_device_interface_config_t dev_cfg = {
-        .clock_speed_hz = LCD_SPI_HZ,
-        .mode = 0,
-        .spics_io_num = BOARD_LCD_CS_PIN,
-        .queue_size = 1,
+
+    s_draw_done = xSemaphoreCreateBinary();
+    if (!s_draw_done) {
+        spi_bus_free(LCD_SPI_HOST);
+        return ESP_ERR_NO_MEM;
+    }
+
+    esp_lcd_panel_io_spi_config_t io_cfg = {
+        .dc_gpio_num = BOARD_LCD_DC_PIN,
+        .cs_gpio_num = BOARD_LCD_CS_PIN,
+        .pclk_hz = LCD_SPI_HZ,
+        .lcd_cmd_bits = 8,
+        .lcd_param_bits = 8,
+        .trans_queue_depth = 3,
+        .on_color_trans_done = on_draw_done,
     };
-    err = spi_bus_add_device(LCD_SPI_HOST, &dev_cfg, &s_spi);
+    esp_lcd_panel_io_handle_t io_handle = NULL;
+    err = esp_lcd_new_panel_io_spi(LCD_SPI_HOST, &io_cfg, &io_handle);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "SPI2 device add failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "panel IO init failed: %s", esp_err_to_name(err));
+        vSemaphoreDelete(s_draw_done);
+        s_draw_done = NULL;
         spi_bus_free(LCD_SPI_HOST);
         return err;
     }
 
-    // Hardware reset, then the panel bring-up sequence.
-    gpio_set_level(BOARD_LCD_RST_PIN, 0);
-    vTaskDelay(pdMS_TO_TICKS(10));
-    gpio_set_level(BOARD_LCD_RST_PIN, 1);
-    vTaskDelay(pdMS_TO_TICKS(120));
+    esp_lcd_panel_dev_config_t dev_cfg = {
+        .reset_gpio_num = BOARD_LCD_RST_PIN,
+        .rgb_ele_order = LCD_RGB_ELEMENT_ORDER_RGB,
+        .bits_per_pixel = 16,
+    };
+    err = esp_lcd_new_panel_st7789(io_handle, &dev_cfg, &s_panel);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "ST7789 panel create failed: %s", esp_err_to_name(err));
+        vSemaphoreDelete(s_draw_done);
+        s_draw_done = NULL;
+        spi_bus_free(LCD_SPI_HOST);
+        return err;
+    }
 
-    lcd_cmd(ST_CMD_SWRESET, NULL, 0);
-    vTaskDelay(pdMS_TO_TICKS(150));
-    lcd_cmd(ST_CMD_SLPOUT, NULL, 0);
-    vTaskDelay(pdMS_TO_TICKS(120)); // datasheet exit-sleep time
-    uint8_t colmod = 0x55; // 16bpp
-    lcd_cmd(ST_CMD_COLMOD, &colmod, 1);
-    uint8_t madctl = 0x00; // portrait, RGB order
-    lcd_cmd(ST_CMD_MADCTL, &madctl, 1);
-    lcd_cmd(ST_CMD_INVON, NULL, 0); // this panel inverts
-    lcd_cmd(ST_CMD_NORON, NULL, 0);
-    lcd_cmd(ST_CMD_DISPON, NULL, 0);
+    esp_lcd_panel_reset(s_panel);
+    esp_lcd_panel_init(s_panel);
+    // Quirks verified on this glass: colors are inverted, and the
+    // 135x240 window sits at (52, 40) in the controller's memory.
+    esp_lcd_panel_invert_color(s_panel, true);
+    esp_lcd_panel_set_gap(s_panel, BOARD_LCD_OFFSET_X, BOARD_LCD_OFFSET_Y);
+    esp_lcd_panel_disp_on_off(s_panel, true);
 
-    ESP_LOGI(TAG, "ST7789 %dx%d ready (offset %d,%d, inverted)",
+    ESP_LOGI(TAG, "ST7789 %dx%d ready via esp_lcd (offset %d,%d, inverted)",
              BOARD_LCD_WIDTH, BOARD_LCD_HEIGHT,
              BOARD_LCD_OFFSET_X, BOARD_LCD_OFFSET_Y);
     return ESP_OK;
@@ -274,10 +256,13 @@ void display_st7789_fill(uint16_t color)
 
 void display_st7789_fill_rect(int x, int y, int w, int h, uint16_t color)
 {
-    if (!s_spi || x < 0 || y < 0 || w <= 0 || h <= 0 ||
+    if (!s_panel || x < 0 || y < 0 || w <= 0 || h <= 0 ||
         x + w > BOARD_LCD_WIDTH || y + h > BOARD_LCD_HEIGHT)
         return;
 
+    // Colors go out MSB first (RGB565 big-endian on the wire); one
+    // scanline pattern is streamed row by row, each transfer owned
+    // until its completion callback fires.
     static uint8_t line[LCD_MAX_XFER];
     uint8_t hi = (uint8_t)(color >> 8);
     uint8_t lo = (uint8_t)(color & 0xFF);
@@ -285,19 +270,20 @@ void display_st7789_fill_rect(int x, int y, int w, int h, uint16_t color)
         line[2 * i] = hi;
         line[2 * i + 1] = lo;
     }
-    lcd_set_window(x, y, w, h);
-    lcd_stream(line, w * 2, h);
+    for (int r = 0; r < h; r++) {
+        if (!draw_sync(x, y + r, x + w, y + r + 1, line))
+            return;
+    }
 }
 
 void display_st7789_set_pixel(int x, int y, uint16_t color)
 {
-    if (!s_spi || x < 0 || y < 0 ||
+    if (!s_panel || x < 0 || y < 0 ||
         x >= BOARD_LCD_WIDTH || y >= BOARD_LCD_HEIGHT)
         return;
 
     uint8_t px[2] = { (uint8_t)(color >> 8), (uint8_t)(color & 0xFF) };
-    lcd_set_window(x, y, 1, 1);
-    lcd_stream(px, 2, 1);
+    draw_sync(x, y, x + 1, y + 1, px);
 }
 
 void display_st7789_backlight(bool on)
