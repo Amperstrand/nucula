@@ -267,19 +267,20 @@ impl Acr1252Card {
         if cc.len() < 11 {
             return Err(CardError::BadCc);
         }
-        let fid = ((cc[7] as u16) << 8) | cc[8] as u16;
+        // CC layouts vary by mapping version (v2.0 moves the FID to
+        // bytes 9-10); the NFC Forum well-known E104 works on both —
+        // try it, fall back to the CC bytes 7-8.
         let mlc = ((cc[5] as u16) << 8) | cc[6] as u16;
-        let file_size = ((cc[9] as u16) << 8) | cc[10] as u16;
-        let need = ndef_message.len() as u16 + 2;
-        if fid != 0xE104 || file_size < need {
-            return Err(CardError::BadCc);
+        let fid: u16 = 0xE104;
+        let sel_file = [0x00, 0xA4, 0x00, 0x0C, 0x02, (fid >> 8) as u8, fid as u8];
+        if self.apdu("select NDEF file", &sel_file).is_err() {
+            let cc_fid = ((cc[7] as u16) << 8) | cc[8] as u16;
+            let fallback = [0x00, 0xA4, 0x00, 0x0C, 0x02, (cc_fid >> 8) as u8, cc_fid as u8];
+            self.apdu("select NDEF file", &fallback)?;
         }
 
-        let sel_file = [0x00, 0xA4, 0x00, 0x0C, 0x02, (fid >> 8) as u8, fid as u8];
-        self.apdu("select NDEF file", &sel_file)?;
-
         // NLEN (big-endian) then the message, chunked by MLc.
-        let mut file = Vec::with_capacity(need as usize);
+        let mut file = Vec::with_capacity(ndef_message.len() + 2);
         file.extend_from_slice(&(ndef_message.len() as u16).to_be_bytes());
         file.extend_from_slice(ndef_message);
         let chunk = mlc.min(0xF0) as usize;

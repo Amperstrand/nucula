@@ -274,6 +274,13 @@ esp_err_t rc522_init(i2c_master_bus_handle_t bus, uint8_t addr)
     if (!rc522_wr(0x26, 0x70))
         return ESP_ERR_INVALID_STATE;
 
+    // Marginal-coupling boost: n-driver conductance and modulated
+    // p-driver conductance to maximum (the rig card sits at the edge
+    // of this small antenna; the default GsN=0x08/63 starves the
+    // field). Bit 7 of GsNReg is a reserved set-bit, kept.
+    if (!rc522_wr(0x27, 0xBF) || !rc522_wr(0x29, 0x3F))
+        return ESP_ERR_INVALID_STATE;
+
     // Antenna stays OFF at idle: sessions (and nfcdump) enable the
     // field via rc522_field(), so a co-located writer — the rig's
     // ACR1252 reaching the sandwiched card — never sees two fields.
@@ -431,10 +438,20 @@ bool rc522_poll(rc522_tag_t *out)
         uint8_t rx[3];
         size_t rx_len;
         uint8_t rx_bits;
-        if (!rc522_transceive(tx, 9, 0, 0, rx, sizeof(rx), &rx_len, &rx_bits)) {
-            ESP_LOGD(TAG, "select lvl=%d transceive failed", cascade);
-            return false;
+        bool sel_ok = false;
+        for (int attempt = 0; attempt < 3 && !sel_ok; attempt++) {
+            sel_ok = rc522_transceive(tx, 9, 0, 0, rx, sizeof(rx), &rx_len, &rx_bits);
+            if (!sel_ok) {
+                uint8_t err = 0;
+                rc522_rd(RC522_ErrorReg, &err);
+                // err bits: 0=protocol 1=parity 2=crc 3=collision
+                // 4=overflow; all-zero after a timeout = tag silent.
+                ESP_LOGD(TAG, "select lvl=%d attempt %d failed err=%02X",
+                          cascade, attempt, err);
+            }
         }
+        if (!sel_ok)
+            return false;
         if (rx_len != 3 || rx_bits != 0) {
             ESP_LOGD(TAG, "select lvl=%d bad frame rx_len=%d bits=%d",
                       cascade, (int)rx_len, rx_bits);
@@ -519,12 +536,17 @@ bool rc522_isodep_connect(rc522_isodep_t *s)
     isodep_set_timeout_ms(20);
 
     // RATS: FSDI 6 (FSD 64), CID 0. Hardware CRC is appended/stripped.
+    // Retried: the tag is freshly selected and the coupling window
+    // live — marginal links often land the second or third frame.
     uint8_t rats[2] = {0xE0, 0x60};
     uint8_t rx[40];
     size_t rx_len;
     uint8_t rx_bits;
-    if (!rc522_transceive(rats, 2, 0, 0, rx, sizeof(rx), &rx_len, &rx_bits) ||
-        rx_bits != 0 || rx_len < 2)
+    bool rats_ok = false;
+    for (int attempt = 0; attempt < 3 && !rats_ok; attempt++)
+        rats_ok = rc522_transceive(rats, 2, 0, 0, rx, sizeof(rx), &rx_len, &rx_bits)
+                  && rx_bits == 0 && rx_len >= 2;
+    if (!rats_ok)
         goto fail;
 
     // ATS: TL [T0 [TA TB TC ...] historical]. FSCI (T0 low nibble)

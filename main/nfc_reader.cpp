@@ -168,20 +168,24 @@ static bool t4t_read_ndef_text(std::string &text_out)
             ESP_LOGW(TAG, "t4: CC select failed");
             break;
         }
-        // CC: len(2) ver(1) MLe(2) MLc(2) fid(2) size(2) read(1) write(1)
-        uint16_t ndef_fid = ((uint16_t)r[7] << 8) | r[8];
-        uint16_t ndef_size = ((uint16_t)r[9] << 8) | r[10];
-        if (ndef_size == 0 || ndef_size > NDEF_MAX_DATA_SIZE) {
-            ESP_LOGW(TAG, "t4: implausible NDEF size %u", (unsigned)ndef_size);
-            break;
-        }
-
+        // CC layouts vary by mapping version: v1.x carries the NDEF
+        // FID at bytes 7-8; v2.0 cards (this NTAG424: len 0x17, ver
+        // 0x20) list a size field there and the FID at 9-10. The NFC
+        // Forum well-known E104 works on both — try it first, fall
+        // back to the CC bytes 7-8.
+        uint16_t ndef_fid = 0xE104;
         uint8_t sel_file[] = {0x00, 0xA4, 0x00, 0x0C, 0x02,
                               (uint8_t)(ndef_fid >> 8), (uint8_t)ndef_fid};
         if (!rc522_isodep_exchange(&s, sel_file, sizeof(sel_file), r, sizeof(r), &rl) ||
             !ok_sw()) {
-            ESP_LOGW(TAG, "t4: NDEF file select failed");
-            break;
+            ndef_fid = ((uint16_t)r[7] << 8) | r[8];
+            sel_file[5] = (uint8_t)(ndef_fid >> 8);
+            sel_file[6] = (uint8_t)ndef_fid;
+            if (!rc522_isodep_exchange(&s, sel_file, sizeof(sel_file), r, sizeof(r), &rl) ||
+                !ok_sw()) {
+                ESP_LOGW(TAG, "t4: NDEF file select failed");
+                break;
+            }
         }
 
         static const uint8_t RD_NLEN[] = {0x00, 0xB0, 0x00, 0x00, 0x02};
