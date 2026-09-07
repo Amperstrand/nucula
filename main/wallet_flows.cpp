@@ -15,7 +15,7 @@
 #include <cJSON.h>
 
 // The network protocol flows: NUT-06 info, NUT-03 swap, receive,
-// NUT-04 mint, and NUT-05 melt, all against this wallet's mint.
+// per NUT-04: mint, and NUT-05 melt, all against this wallet's mint.
 
 namespace cashu {
 
@@ -290,6 +290,7 @@ int64_t Wallet::adopt_proofs(std::vector<Proof>& fresh)
 // Swap (NUT-03)
 // -------------------------------------------------------------------------
 
+// NUT #03: The swap operation is the most important component of the Cashu system. A swap operation consists of multiple inputs (`Proofs`) and outputs (`BlindedMessages`). Mints verify and invalidate the inputs and issue new promises (`BlindSignatures`).
 bool Wallet::swap(std::vector<Proof>& inputs, int amount,
                   std::vector<Proof>& new_proofs,
                   std::vector<Proof>& change)
@@ -300,7 +301,7 @@ bool Wallet::swap(std::vector<Proof>& inputs, int amount,
         return false;
     }
 
-    // NUT-03 transactions are single-unit (mint error 11009) and outputs
+    // per NUT-03: transactions are single-unit (mint error 11009) and outputs
     // must match the inputs' unit (11010) — derive it from the inputs'
     // keysets rather than trusting any caller-supplied value.
     std::string unit;
@@ -468,7 +469,7 @@ bool Wallet::normalize_input_keyset_ids(std::vector<Proof>& inputs)
     return false;
 }
 
-// NUT-12 (Carol-side): if a transferred proof carries a DLEQ with the
+// per NUT-12 (Carol-side): if a transferred proof carries a DLEQ with the
 // sender's blinding factor `r`, verify it against the keyset's pubkey for
 // that amount before swapping. A missing DLEQ is allowed (warn only)
 // since senders are not required to forward it.
@@ -529,6 +530,7 @@ bool Wallet::verify_forwarded_dleq(const std::vector<Proof>& inputs) const
 // NUT-04: Mint tokens (method-generic)
 // -------------------------------------------------------------------------
 
+// NUT #04: Minting tokens is a two-step process: requesting a mint quote and minting new tokens.
 bool Wallet::request_mint_quote(int amount, const std::string& unit,
                                 const std::string& method, MintQuote& quote_out)
 {
@@ -760,7 +762,7 @@ bool Wallet::melt_tokens(const MeltQuote& quote, int& change_amount)
     int max_change = input_sum - quote.amount - input_fee;
     if (max_change < 0) max_change = 0;
 
-    // NUT-08 blank outputs for change (amount=0, mint assigns values)
+    // per NUT-08: blank outputs for change (amount=0, mint assigns values)
     int n_blank = blank_output_count(max_change);
     BlindingData change_blinding;
     if (n_blank > 0) {

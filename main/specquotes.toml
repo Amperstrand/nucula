@@ -1,0 +1,16 @@
+# greatspectations spec-quote drift config for the nucula C/C++ core
+#
+# Same pattern as cashu-core-lite/specquotes.toml — verbatim NUT quotes
+# pinned in source comments. C-family comment syntax matches the Rust
+# config (both use "// NUT #XX:").
+#
+# Run (same flags as micronuts rust-ci.yml speccheck; spec clone lives in
+# the sibling micronuts checkout, resolved relative to this file):
+#   greatspectate check --config main/specquotes.toml --comment-start "// " \
+#     --comment-continue "//" --comment-aside "// Note:" \
+#     main/crypto.c main/keyset.cpp main/wallet_flows.cpp
+
+[sources.NUT]
+format = "markdown"
+dir = "../../micronuts/cashu-core-lite/nuts"
+pattern = "{id:02d}.md"
