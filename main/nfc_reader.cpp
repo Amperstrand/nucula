@@ -65,7 +65,7 @@ public:
                 return false;
             cached_page_ = page;
         }
-        out = buf_[addr % 4];
+        out = buf_[addr - (uint32_t)cached_page_ * 4];
         return true;
     }
 
