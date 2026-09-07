@@ -305,3 +305,17 @@ impl Acr1252Card {
         let _ = self.card.disconnect(Disposition::LeaveCard);
     }
 }
+
+/// RAII rig citizenship: restores auto-polling (the factory default)
+/// when dropped, so a test that fails mid-flow still leaves the reader
+/// discoverable for other lab users — the polling setting is
+/// NVM-backed and survives replugs.
+pub struct PollingRestoreOnDrop;
+
+impl Drop for PollingRestoreOnDrop {
+    fn drop(&mut self) {
+        if let Ok(mut acr) = Acr1252::open() {
+            let _ = acr.set_auto_polling(0x8F);
+        }
+    }
+}

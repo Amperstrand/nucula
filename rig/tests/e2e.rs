@@ -74,6 +74,8 @@ async fn relay_token_over_the_air_via_boltcard() {
         let mut acr = Acr1252::open().expect("ACR direct");
         acr.set_auto_polling(0x00).expect("polling off");
     }
+    // Restores polling (0x8F) on drop — even on a failed assertion.
+    let _polling_guard = nucula_rig::acr::PollingRestoreOnDrop;
 
     let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
     let _ = atom.nfc_stop();
@@ -112,6 +114,7 @@ async fn relay_stashes_offline_then_drains_on_reconnect() {
         let mut acr = Acr1252::open().expect("ACR direct");
         acr.set_auto_polling(0x00).expect("polling off");
     }
+    let _polling_guard = nucula_rig::acr::PollingRestoreOnDrop;
 
     let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
     let _ = atom.nfc_stop();
