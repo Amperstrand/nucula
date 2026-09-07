@@ -119,6 +119,24 @@ over Type 4 / ISO-DEP, extracts the token, swaps it at the mint →
 `redeemed` log + balance on the console. The offline variant asserts
 the stash-then-drain path instead.
 
+### Leaving a card in the rig (interference)
+
+Electrically, a card parked in the sandwich is inert: the atom's
+RC522 antenna is gated OFF at idle (radiates only during reader
+sessions), and being polled by a reader is normal life for a card.
+The interference concern is *sharing the ACR*: the polling setting is
+NVM-backed and global for the reader — while a nucula run has it
+quieted, nothing else can see ANY card on that reader (bolty HIL
+shares this reader class).
+
+The e2e handles this: a Drop guard restores factory auto-polling on
+exit — including on failed assertions — so a finished run always
+returns the reader to normal. Between runs the sandwich card is
+visible to other users like any card left on a reader; if this ACR is
+dedicated to the nucula rig that is fine permanently, otherwise park
+the card on the atom only (outside ACR reach) between sessions and
+move it into the sandwich for nucula runs.
+
 ## Rig hardware map (this lab)
 
 | Role | Device | Path |
