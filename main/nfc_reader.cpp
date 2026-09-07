@@ -297,8 +297,17 @@ static void nfc_task(void *arg)
         s_state.store(NfcState::active);
 
         std::string text;
-        bool have_text = (tag.sak & 0x20) ? t4t_read_ndef_text(text)
-                                          : t2_read_ndef_text(text);
+        bool have_text = false;
+        if (tag.sak & 0x20) {
+            have_text = t4t_read_ndef_text(text);
+            if (!have_text) {
+                ESP_LOGI(TAG, "t4 failed, falling back to t2 read");
+                vTaskDelay(pdMS_TO_TICKS(10)); // settle between T4T and T2T reads
+                have_text = t2_read_ndef_text(text);
+            }
+        } else {
+            have_text = t2_read_ndef_text(text);
+        }
         if (!have_text) {
             ESP_LOGW(TAG, "no NDEF text on tag");
             vTaskDelay(pdMS_TO_TICKS(1000));
