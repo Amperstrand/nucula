@@ -156,6 +156,11 @@ impl Acr1252 {
     pub fn present_ndef_image(&mut self, image: &[u8]) -> Result<(), AcrError> {
         self.set_picc_operating_parameter(0xFF)?;
         self.set_auto_polling(0x00)?; // quiet BEFORE any mode switch
+        // ...and let the quiet beat the next poll cycle before a mode
+        // switch goes out: an exit raced an in-flight poll exactly once
+        // (the rig preflight had just restored polling 0x8F) and wedged
+        // the CCID loop until a physical replug.
+        std::thread::sleep(std::time::Duration::from_millis(1000));
         self.exit_card_emulation()?;
         for (off, chunk) in image.chunks(48).enumerate() {
             self.write_ce_data((off * 48) as u8, chunk)?;

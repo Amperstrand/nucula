@@ -153,6 +153,64 @@ async fn console_relay_money_loop() {
     assert!(balance.contains("1 sat"), "balance missing the received sat: {balance}");
 }
 
+/// ACR-as-tag relay e2e: the payer mints 1 sat at the LAN mint, the
+/// token is DLEQ-stripped to fit the 256-byte emulated NDEF area, and
+/// the ACR1252 presents it as an emulated Type 2 tag (polling quieted
+/// before the mode switch, CE exited, image written + verified,
+/// emulation re-entered). The nucula reader board then reads the
+/// emulated tag over RF and redeems the token — the full money loop
+/// with no physical card in the loop.
+#[cfg(feature = "payer")]
+#[tokio::test]
+#[ignore = "hardware: ACR1252U + nucula reader board + LAN mint"]
+async fn relay_acr_emulated() {
+    let mint = mint_url();
+    let token = nucula_rig::payer::mint_token(&mint, 1).await.expect("mint");
+    let stripped = nucula_rig::strip::strip_dleq(&token).expect("dleq strip");
+    eprintln!("token: {} chars -> {} after dleq strip", token.len(), stripped.len());
+    let image =
+        nucula_rig::ndef_t2t::build_ndef_text_image(&stripped, 256).expect("ndef image");
+    eprintln!("ndef image: {} bytes", image.len());
+
+    let _rig = nucula_rig::rig::RigGuard::acquire().expect("rig");
+    eprintln!("{}", _rig.report);
+
+    {
+        let mut acr = Acr1252::open().expect("ACR direct");
+        acr.present_ndef_image(&image).expect("present NDEF image");
+    }
+
+    let mut atom = AtomConsole::open(&atom_port()).expect("console");
+    let _ = atom.nfc_stop();
+    let st = atom.status().expect("status");
+    assert!(st.contains("connected"), "wifi down: {st}");
+    let out = atom.mint_add(&mint).expect("mint add");
+    assert!(!out.contains("error"), "mint add failed: {out}");
+
+    let before = sat_total(&atom.cmd("balance").expect("balance before"));
+    atom.nfc_request(1).expect("nfc request");
+    let log = atom
+        .wait_for_log("received", Duration::from_secs(60))
+        .expect("no receive log");
+    eprintln!("{log}");
+    let _ = atom.nfc_stop();
+
+    let balance = atom.cmd("balance").expect("balance after");
+    eprintln!("{balance}");
+    let after = sat_total(&balance);
+    assert_eq!(after, before + 1, "balance did not gain the relayed sat: {balance}");
+}
+
+/// Sum the "N sat" amounts in a `balance` command's output.
+fn sat_total(balance: &str) -> u64 {
+    balance
+        .lines()
+        .filter_map(|l| l.trim().strip_suffix(" sat"))
+        .filter_map(|l| l.split_whitespace().next())
+        .filter_map(|n| n.parse::<u64>().ok())
+        .sum()
+}
+
 /// Offline relay variant: same hand-off, but the atom is out of AP
 /// range (or the AP is down) after having once fetched the mint's
 /// keysets — the token is stashed, then drained automatically once
