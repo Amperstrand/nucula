@@ -182,6 +182,9 @@ pub enum CardError {
     Apdu { cmd: &'static str, sw: u16 },
     Pcsc(pcsc::Error),
     BadCc,
+    /// The token's NDEF file exceeds the card's declared capacity —
+    /// not fixable in software; use a bigger-NDEF carrier.
+    Capacity { need: usize, have: usize },
 }
 
 impl fmt::Display for CardError {
@@ -191,6 +194,11 @@ impl fmt::Display for CardError {
             CardError::Apdu { cmd, sw } => write!(f, "{cmd}: SW {sw:04X}"),
             CardError::Pcsc(e) => write!(f, "pcsc: {e}"),
             CardError::BadCc => write!(f, "implausible capability container"),
+            CardError::Capacity { need, have } => write!(
+                f,
+                "NDEF file needs {need} bytes, card capacity {have} — use a \
+                 bigger-NDEF carrier (NTAG 424 DNA class)"
+            ),
         }
     }
 }
@@ -271,6 +279,12 @@ impl Acr1252Card {
         // bytes 9-10); the NFC Forum well-known E104 works on both —
         // try it, fall back to the CC bytes 7-8.
         let mlc = ((cc[5] as u16) << 8) | cc[6] as u16;
+        if let Some(cap) = cc_ndef_capacity(&cc) {
+            let need = ndef_message.len() + 2; // NLEN + message
+            if need > cap as usize {
+                return Err(CardError::Capacity { need, have: cap as usize });
+            }
+        }
         let fid: u16 = 0xE104;
         let sel_file = [0x00, 0xA4, 0x00, 0x0C, 0x02, (fid >> 8) as u8, fid as u8];
         if self.apdu("select NDEF file", &sel_file).is_err() {
@@ -305,4 +319,39 @@ impl Acr1252Card {
     pub fn disconnect(self) {
         let _ = self.card.disconnect(Disposition::LeaveCard);
     }
+}
+
+/// NDEF file capacity from a capability container, when determinable:
+/// v2.x File Control TLV (T=04) size field, or the v1 fixed layout.
+fn cc_ndef_capacity(cc: &[u8]) -> Option<u16> {
+    if cc.len() < 15 {
+        return None;
+    }
+    // v2.x: walk TLVs after the fixed header (CCLEN 2, ver 1, MLe 2, MLc 2).
+    if cc[2] >= 0x20 {
+        // v2.x: TLV area begins right after the fixed header (CCLEN 2,
+        // ver 1, MLe 2, MLc 2 = offset 7). T=04 is the NDEF File
+        // Control TLV: T(1) L(1) FID(2) size(2) R(1) W(1).
+        let cclen = (cc[0] as usize) * 256 + cc[1] as usize;
+        let mut off = 7;
+        while off + 2 <= cc.len().min(cclen) {
+            let (t, l) = (cc[off], cc[off + 1] as usize);
+            if t == 0x04 && l >= 4 && off + 2 + 6 <= cc.len().min(cclen) {
+                let sz = ((cc[off + 4] as u16) << 8) | cc[off + 5] as u16;
+                if sz > 0 {
+                    return Some(sz);
+                }
+            }
+            if l == 0 {
+                break;
+            }
+            off += 2 + l;
+        }
+        return None;
+    }
+    // v1: FID at 7-8, size at 9-10.
+    if cc[7] == 0xE1 && cc[8] == 0x04 {
+        return Some(((cc[9] as u16) << 8) | cc[10] as u16);
+    }
+    None
 }

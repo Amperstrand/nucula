@@ -66,7 +66,12 @@ async fn relay_token_over_the_air_via_boltcard() {
     }
     let mut card = nucula_rig::acr::Acr1252Card::connect().expect("card in field");
     let record = nucula_rig::ndef_t2t::build_ndef_text_record(&token);
-    card.write_ndef(&record).expect("NDEF write");
+    if let Err(e) = card.write_ndef(&record) {
+        if matches!(e, nucula_rig::acr::CardError::Capacity { .. }) {
+            panic!("{e} — swap in a bigger-NDEF boltcard (NTAG 424 DNA class)");
+        }
+        panic!("NDEF write failed: {e}");
+    }
     card.disconnect();
     {
         let mut acr = Acr1252::open().expect("ACR direct");
@@ -74,6 +79,9 @@ async fn relay_token_over_the_air_via_boltcard() {
     }
     let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
     let _ = atom.nfc_stop();
+    // The redeem needs the LAN mint reachable from the atom.
+    let st = atom.status().expect("status");
+    assert!(st.contains("connected"), "atom wifi down: {st}");
     let out = atom.mint_add(&mint).expect("mint add");
     assert!(!out.contains("error"), "mint add failed: {out}");
     atom.nfc_request(1).expect("nfc request");
