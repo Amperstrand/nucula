@@ -212,7 +212,7 @@ static int scan_devices(i2c_master_bus_handle_t bus, int sda, int scl)
     return found;
 }
 
-#if CONFIG_NUCULA_BOARD_ATOM
+#if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
 // Second-controller helpers for probing arbitrary pin pairs: the main
 // bus owns I2C_NUM_0, and classic ESP32 has a second controller (the
 // C3 does not — these diagnostics are atom-only).
@@ -293,7 +293,7 @@ static void cmd_i2cscan(const char *arg)
         console_print("  nothing found\r\n");
     total += n > 0 ? n : 0;
 
-#if CONFIG_NUCULA_BOARD_ATOM
+#if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
     if (arg && strlen(arg) > 0) {
         int sda, scl;
         if (sscanf(arg, "%d %d", &sda, &scl) != 2) {
@@ -323,7 +323,7 @@ static void cmd_i2cscan(const char *arg)
     console_printf("scan done, %d device(s)\r\n", total);
 }
 
-#if CONFIG_NUCULA_BOARD_ATOM
+#if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
 #include "rc522.h"
 static void cmd_nfcdump(const char *arg)
 {
@@ -487,7 +487,7 @@ void commands_system_register(void)
     console_register_cmd("keypad",  cmd_keypad,   "keypad scan — probe PCF8574 wiring");
     console_register_cmd("i2cscan", cmd_i2cscan,  "i2cscan [sda scl] — find I2C devices");
     console_register_cmd("i2crecover", cmd_i2crecover, "i2crecover <clocks> — clear stuck bus");
-#if CONFIG_NUCULA_BOARD_ATOM
+#if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
     console_register_cmd("i2cdump", cmd_i2cdump, "i2cdump <sda> <scl> <addr> — dump regs");
     console_register_cmd("nfcdump", cmd_nfcdump, "nfcdump [pages] — dump tag pages");
 #endif
