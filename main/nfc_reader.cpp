@@ -131,7 +131,15 @@ static bool t2_read_ndef_text(std::string &text_out)
             if (!mem.byte_at(addr + i, msg[i]))
                 return false;
         }
-        return ndef_parse_message(msg, len, text_out);
+        // ndef_parse_message takes the Type 4 FILE form (NLEN + records);
+        // a Type 2 TLV carries bare records, so stage them behind an
+        // NLEN prefix in the same buffer.
+        if (len + 2 > NDEF_MAX_DATA_SIZE)
+            return false;
+        memmove(&msg[2], msg, len);
+        msg[0] = (uint8_t)(len >> 8);
+        msg[1] = (uint8_t)len;
+        return ndef_parse_message(msg, len + 2, text_out);
     }
 }
 
@@ -200,13 +208,18 @@ static bool t4t_read_ndef_text(std::string &text_out)
             break;
         }
 
+        // Read the whole NDEF file (NLEN first) so the parser gets the
+        // file form it expects.
+        if ((size_t)nlen + 2 > NDEF_MAX_DATA_SIZE)
+            break;
         static uint8_t msg[NDEF_MAX_DATA_SIZE];
+        size_t total = (size_t)nlen + 2;
         size_t got = 0;
         bool read_ok = true;
-        while (got < nlen) {
-            uint8_t chunk = (uint8_t)(nlen - got < 32 ? nlen - got : 32);
-            uint8_t rd[] = {0x00, 0xB0, (uint8_t)((got + 2) >> 8),
-                            (uint8_t)(got + 2), chunk};
+        while (got < total) {
+            uint8_t chunk = (uint8_t)(total - got < 32 ? total - got : 32);
+            uint8_t rd[] = {0x00, 0xB0, (uint8_t)(got >> 8),
+                            (uint8_t)got, chunk};
             if (!rc522_isodep_exchange(&s, rd, sizeof(rd), r, sizeof(r), &rl) ||
                 !ok_sw() || rl < (size_t)chunk + 2) {
                 ESP_LOGW(TAG, "t4: read @%u failed", (unsigned)got);
@@ -219,7 +232,7 @@ static bool t4t_read_ndef_text(std::string &text_out)
         if (!read_ok)
             break;
 
-        ok = ndef_parse_message(msg, nlen, text_out);
+        ok = ndef_parse_message(msg, total, text_out);
     } while (false);
 
     rc522_isodep_end(&s);

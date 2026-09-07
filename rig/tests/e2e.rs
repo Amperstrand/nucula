@@ -86,6 +86,34 @@ async fn relay_token_over_the_air_via_boltcard() {
     eprintln!("{status}");
 }
 
+/// RF smoke: the atom's NFC front-end against the card in the rig.
+/// Asserts ISO14443-3 up to anticollision within one reader session —
+/// REQA answered and at least one anticollision round completed (the
+/// observed rates: REQA near-100% after the conductance boost,
+/// anticollision ~25/120s; the 9-byte SELECT is coupling-limited by the
+/// sandwich layout, tracked separately). Proves the I2C driver, field
+/// gating, REQA/WUPA, and bit-framed anticollision live on hardware.
+#[test]
+#[ignore = "hardware: atom + card on its antenna"]
+fn atom_rf_iso14443_smoke() {
+    let mut atom = AtomConsole::open(&atom_port()).expect("atom console");
+    let _ = atom.nfc_stop();
+    let _ = atom.cmd("log d rc522");
+    atom.nfc_request(1).expect("nfc request");
+
+    let log = atom
+        .wait_for_log("REQA: ATQA=", Duration::from_secs(30))
+        .expect("no REQA answer in 30s");
+    eprintln!("REQA up: {}", log.lines().last().unwrap_or(""));
+
+    let log2 = atom
+        .wait_for_log("anticoll lvl=0 ok=1", Duration::from_secs(120))
+        .expect("no completed anticollision in 120s");
+    eprintln!("anticollision completed");
+    assert!(log2.contains("anticoll lvl=0 ok=1"));
+    let _ = atom.nfc_stop();
+}
+
 /// Console-relay e2e: the full money loop minus the RF hop. The payer
 /// mints a real token at the LAN mint and the atom receives it via its
 /// serial console (`receive`) — exercising everything the over-the-air

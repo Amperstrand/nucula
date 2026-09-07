@@ -67,6 +67,7 @@ add_executable(nucula_host_tests
     ${MAIN_DIR}/wallet_blind.cpp
     ${MAIN_DIR}/wallet_identity.cpp
     ${MAIN_DIR}/wallet_selftest.cpp
+    ${MAIN_DIR}/ndef.cpp
 )
 
 target_include_directories(nucula_host_tests PRIVATE
@@ -81,10 +82,16 @@ target_link_libraries(nucula_host_tests PRIVATE
     PkgConfig::SECP256K1
 )
 
-# The wallet sources call the http-backed flow methods (defined in
-# wallet_flows.cpp against esp_http_client); the test build provides
-# minimal fakes so the pure logic links.
 target_compile_definitions(nucula_host_tests PRIVATE
     NUCULA_HOST_TEST
     MBEDTLS_CONFIG_FILE="mbedtls_config_host.h"
 )
+
+# NFC NDEF engine tests: the emulated-tag APDU engine + receiver
+# reassembly (ndef.cpp) against vectors, no hardware.
+add_executable(nucula_nfc_tests nfc_tests.cpp ${MAIN_DIR}/ndef.cpp)
+target_include_directories(nucula_nfc_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/shims
+    ${MAIN_DIR}
+)
+target_compile_definitions(nucula_nfc_tests PRIVATE NUCULA_HOST_TEST)
