@@ -60,6 +60,106 @@ static int test_hash_to_curve(const secp256k1_context *ctx)
     return 1;
 }
 
+/**
+ * NUT-00 Proof.secret convention: hash_to_curve consumes the UTF-8 bytes of the
+ * final secret STRING, not the raw entropy a hex secret was derived from.
+ *
+ * The existing primitive vectors above use raw-byte inputs, so they cannot
+ * distinguish the two conventions. These string vectors (aligned with the
+ * cross-implementation vectors in cashu-core-lite tests/cross_vectors.rs and
+ * the NUT-00 test vectors) pin the convention, including the hex-looking
+ * secret trap and its negative.
+ */
+static int test_hash_to_curve_secret_strings(const secp256k1_context *ctx)
+{
+    static const struct {
+        const char *secret;
+        const char *expected_hex;
+    } vectors[] = {
+        {
+            "test-secret-01",
+            "0279110ffdbbaccf1f96e0641dd8794fb206e8f95eb52c0fa001487b070cb5f7b1",
+        },
+        {
+            "a",
+            "029794c59a5d9b910a18e50e10623c864b77c7edf4552f8652b0c85d30ac0498f0",
+        },
+        {
+            // hex-looking secret trap: hash the 64 ASCII characters...
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+            "0244d4bdec44e84725e2b6d9d7a2896df8bc27b482e84e0cb2144272d318375bc3",
+        },
+    };
+
+    for (int i = 0; i < 3; i++) {
+        size_t len = strlen(vectors[i].secret);
+
+        unsigned char expected[33];
+        hex_to_bytes(vectors[i].expected_hex, expected, 33);
+
+        secp256k1_pubkey point;
+        if (!cashu_hash_to_curve(ctx, &point, (const unsigned char *)vectors[i].secret, len)) {
+            ESP_LOGE(TAG, "hash_to_curve string %d: failed", i + 1);
+            return 0;
+        }
+
+        unsigned char result[33];
+        cashu_pubkey_serialize(ctx, result, &point);
+
+        if (memcmp(result, expected, 33) != 0) {
+            char got[67];
+            bytes_to_hex(result, 33, got);
+            ESP_LOGE(TAG, "hash_to_curve string %d: mismatch\n  got:    %s\n  expect: %s",
+                     i + 1, got, vectors[i].expected_hex);
+            return 0;
+        }
+        ESP_LOGI(TAG, "hash_to_curve string %d: OK", i + 1);
+    }
+
+    // Negative vector: hashing hex_decode(secret) instead of utf8(secret) must
+    // derive a DIFFERENT (wrong) point. A regression that passes raw entropy
+    // to cashu_blind_message would flip this check.
+    static const char *trap_secret =
+        "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+    static const char *trap_wrong_hex =
+        "02a265a770fac13ca9467f4b53e2429dbf37a22d9e6bf0c550682dc49952805640";
+
+    unsigned char entropy[32];
+    hex_to_bytes(trap_secret, entropy, 32);
+
+    secp256k1_pubkey wrong_point;
+    if (!cashu_hash_to_curve(ctx, &wrong_point, entropy, 32)) {
+        ESP_LOGE(TAG, "hash_to_curve negative: failed");
+        return 0;
+    }
+    unsigned char wrong_result[33];
+    cashu_pubkey_serialize(ctx, wrong_result, &wrong_point);
+
+    unsigned char expected_wrong[33];
+    hex_to_bytes(trap_wrong_hex, expected_wrong, 33);
+    if (memcmp(wrong_result, expected_wrong, 33) != 0) {
+        char got[67];
+        bytes_to_hex(wrong_result, 33, got);
+        ESP_LOGE(TAG, "hash_to_curve negative: unexpected\n  got:    %s\n  expect: %s",
+                 got, trap_wrong_hex);
+        return 0;
+    }
+
+    // and it must differ from the correct Y for that secret string
+    secp256k1_pubkey correct_point;
+    cashu_hash_to_curve(ctx, &correct_point, (const unsigned char *)trap_secret,
+                        strlen(trap_secret));
+    unsigned char correct_result[33];
+    cashu_pubkey_serialize(ctx, correct_result, &correct_point);
+    if (memcmp(wrong_result, correct_result, 33) == 0) {
+        ESP_LOGE(TAG, "hash_to_curve negative: WRONG derivation matches correct point");
+        return 0;
+    }
+
+    ESP_LOGI(TAG, "hash_to_curve negative (entropy-hashing trap): OK");
+    return 1;
+}
+
 static int test_blind_message(const secp256k1_context *ctx)
 {
     static const struct {
@@ -311,6 +411,7 @@ int crypto_run_tests(const secp256k1_context *ctx)
     int pass = 1;
     pass &= test_sha256();
     pass &= test_hash_to_curve(ctx);
+    pass &= test_hash_to_curve_secret_strings(ctx);
     pass &= test_blind_message(ctx);
     pass &= test_unblind(ctx);
     pass &= test_dleq(ctx);
