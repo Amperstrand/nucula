@@ -77,6 +77,12 @@ impl AtomConsole {
         self.write_line(line)
     }
 
+    /// Raw port access for diagnostics that outlive `cmd`'s 10 s window
+    /// (e.g. a 68-page `nfcdump`).
+    pub fn port_mut(&mut self) -> &mut Box<dyn SerialPort> {
+        &mut self.port
+    }
+
     fn write_line(&mut self, line: &str) -> Result<String, ConsoleError> {
         self.port.write_all(format!("{line}\r\n").as_bytes())?;
         self.port.flush()?;

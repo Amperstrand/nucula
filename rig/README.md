@@ -61,27 +61,31 @@ antennas by a few cm restores the link. The one complete ISO-DEP
 activation (RATS + ATS, fsc=64 fwt=39 ms) proves the entire T4T code
 path works when coupling permits.
 
-### Token size vs. the emulated area (resolved — Ultralight CE is dead)
+### Ultralight CE geometry (MEASURED — full tokens cannot relay on this reader)
 
-A 1-sat cashuB token from the local mint — the smallest possible
-hand-off, single proof, DLEQ attached (nucula requires NUT-12) —
-measures **366 chars**; with CC + TLV + record overhead the NDEF image
-is ~380 bytes. The Write Card Emulation Data StartOffset is one byte,
-which conservatively caps the addressable image at 256 bytes. Whether
-offsets ≥ 256 actually wrap, error, or address a larger area is
-**unverified** — probe it over USB *before* entering CE (no power
-cycle burned):
+Two independent ceilings, both now measured (2026-09-12):
 
-```python
-write_ce_data(240, marker)   # then read_ce_data(240, 16)
-write_ce_data(280, marker)   # byte overflow or accepted?
-```
+1. **Token floor**: a 1-sat cashuB token with DLEQ (nucula requires
+   NUT-12) measures **374 chars**; DLEQ-stripped for the rig,
+   **225 chars** → a **~239-byte NDEF image**.
+2. **Served geometry**: the ACR1252U's Ultralight CE **serves only the
+   original 16-page MIFARE Ultralight geometry over RF — data pages
+   3..15 = 52 bytes (~38 text chars)** — even though the USB-side CE
+   data area accepts, reads back, and verifies a full 256-byte image.
+   Evidence (cold reads, fresh ISO14443 activation each time, so not
+   RF-depth or sequencing): `nfcdump 4 16` → `10: read failed`,
+   `nfcdump 4 60` → `3C: read failed`; pages 0..15 read back the
+   presented image byte-for-byte.
 
-If the area really caps at 256, Ultralight-CE cannot carry DLEQ
-tokens; the pivots are a relay sticker (ACR writes a real NTAG the
-atom reads) or NDEF Type 4 over ISO-DEP on the RC522 (NTAG424 bolt
-cards as carriers) — the e2e guards already refuse to burn a CE entry
-on an oversized image.
+**Consequence**: the stripped-token floor is ~4.6× the servable area —
+`relay_acr_emulated` (full token) is blocked on this reader hardware and
+now fail-fasts with this measurement instead of timing out. What the CE
+path still proves: the sub-ceiling relay
+(`relay_acr_emulated_small_payload`) exercises CE → RF → T2T read →
+NDEF text extraction end-to-end. The full-token pivots remain: a relay
+sticker (ACR writes a real NTAG the board reads), NTAG424 bolt cards as
+T4T/ISO-DEP carriers, or phone HCE (phones emulate Type 4 tags — the
+Session-2 path).
 
 ### The CE one-way door
 

@@ -182,6 +182,17 @@ async fn relay_acr_emulated() {
     );
     let image = nucula_rig::ndef_t2t::build_ndef_text_image(&stripped, 256).expect("ndef image");
     eprintln!("ndef image: {} bytes", image.len());
+    // Measured 2026-09-12 (cold reads, fresh activation each time):
+    // the ACR1252U's Ultralight CE serves only the original 16-page
+    // geometry over RF — data pages 3..15 = 52 bytes — no matter that
+    // the USB-side CE area accepts and verifies 256. The stripped-token
+    // floor (~239 B image) cannot relay on this reader; see rig/README.
+    assert!(
+        image.len() <= 52,
+        "ACR1252U Ultralight CE serves 16 pages (52 B) over RF — {} B cannot relay \
+         (measured; rig/README \"Ultralight CE geometry\")",
+        image.len()
+    );
 
     let _rig = nucula_rig::rig::RigGuard::acquire().expect("rig");
     eprintln!("{}", _rig.report);
@@ -214,6 +225,53 @@ async fn relay_acr_emulated() {
         before + 1,
         "balance did not gain the relayed sat: {balance}"
     );
+}
+
+/// Sub-ceiling CE relay: proves the whole ACR-CE -> RF -> RC522 ->
+/// T2T-read -> NDEF-text-extraction chain with a payload that FITS the
+/// reader's served geometry (data pages 3..15 = 52 bytes ≈ 38 text
+/// chars, measured 2026-09-12). The token-sized variant
+/// (`relay_acr_emulated`) is blocked on this reader hardware; the
+/// firmware logs the extracted non-token text as
+/// "no cashu token in: <text>", which this test asserts on.
+#[cfg(feature = "live")]
+#[tokio::test]
+#[ignore = "hardware: ACR1252U + nucula reader board (no mint needed)"]
+async fn relay_acr_emulated_small_payload() {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let payload = format!("nucula-relay-ok-{ts}");
+    assert!(payload.len() <= 38, "payload exceeds the served geometry");
+
+    let image = nucula_rig::ndef_t2t::build_ndef_text_image(&payload, 48).expect("ndef image");
+    assert!(
+        image.len() <= 52,
+        "image {} B exceeds the 52 B served area",
+        image.len()
+    );
+
+    let _rig = nucula_rig::rig::RigGuard::acquire().expect("rig");
+    eprintln!("{}", _rig.report);
+
+    {
+        let mut acr = Acr1252::open().expect("ACR direct");
+        acr.present_ndef_image(&image).expect("present NDEF image");
+    }
+
+    let mut atom = AtomConsole::open(&atom_port()).expect("console");
+    let _ = atom.nfc_stop();
+    atom.nfc_request(1).expect("nfc request");
+
+    let log = atom
+        .wait_for_log(
+            &format!("no cashu token in: {payload}"),
+            Duration::from_secs(60),
+        )
+        .expect("payload never crossed the RF hop");
+    eprintln!("{log}");
+    let _ = atom.nfc_stop();
 }
 
 /// Sum the "N sat" amounts in a `balance` command's output.

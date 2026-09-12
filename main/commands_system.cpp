@@ -327,8 +327,15 @@ static void cmd_i2cscan(const char *arg)
 #include "rc522.h"
 static void cmd_nfcdump(const char *arg)
 {
-    int pages = arg && strlen(arg) > 0 ? atoi(arg) : 16;
-    if (pages <= 0 || pages > 64) pages = 16;
+    int start = 0;
+    int pages = 16;
+    if (arg && strlen(arg) > 0) {
+        // "nfcdump [pages] [start]" — start diagnoses geometry caps
+        // (read a high page COLD instead of deep in a 0..N sequence).
+        int n = sscanf(arg, "%d %d", &pages, &start);
+        (void)n;
+    }
+    if (pages <= 0 || pages + start > 64) pages = 16;
     rc522_field(true); // field is off at idle; radiate for the dump
     vTaskDelay(pdMS_TO_TICKS(20)); // let a cold tag power up
     rc522_tag_t tag;
@@ -402,7 +409,7 @@ static void cmd_nfcdump(const char *arg)
         rc522_isodep_end(&s);
     } else {
         // Type 2: Ultralight pages.
-        for (int p = 0; p < pages; p += 4) {
+        for (int p = start; p < start + pages; p += 4) {
             uint8_t blk[16];
             if (!rc522_ul_read((uint8_t)p, blk)) {
                 console_printf("%02X: read failed\r\n", p);
@@ -489,7 +496,7 @@ void commands_system_register(void)
     console_register_cmd("i2crecover", cmd_i2crecover, "i2crecover <clocks> — clear stuck bus");
 #if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
     console_register_cmd("i2cdump", cmd_i2cdump, "i2cdump <sda> <scl> <addr> — dump regs");
-    console_register_cmd("nfcdump", cmd_nfcdump, "nfcdump [pages] — dump tag pages");
+    console_register_cmd("nfcdump", cmd_nfcdump, "nfcdump [pages] [start] — dump tag pages");
 #endif
 #if CONFIG_NUCULA_BOARD_M5STICK
     console_register_cmd("display", cmd_display, "display <on|off|fill [rgb565]>");

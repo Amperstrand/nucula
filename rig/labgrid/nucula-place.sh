@@ -20,5 +20,6 @@ else
 fi
 
 lg add-match 'ai-legion-small-microfips/atom-b-serial/BenchSerialToken'
+lg add-match 'ai-legion-small-microfips/m5stick-nucula-serial/BenchSerialToken'
 lg add-match 'ai-legion-small/acr1252/NetworkSmartcardReader'
 lg show | sed -n '1,6p'

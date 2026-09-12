@@ -51,12 +51,31 @@ length, so a short echo means a partial write even with SW 9000.
 
 ## Other rig gotchas (learned the hard way, same day)
 
-- **M5Stick flash: 115200 baud.** The Hades2001 USB-serial bridge flakes
-  at 460800 (syncs, then "No serial data received"). `idf.py flash`
-  defaults to 460800 — flash with raw esptool instead:
-  `python -m esptool --chip esp32 -b 115200 --before default_reset
-  --after no_reset write_flash "@flash_args"` from `build-m5stick/`,
+- **M5Stick flash: 115200 baud, EXPLICIT --port, daemon stopped.** Three
+  traps, all bit sessions in the field (2026-09-12):
+  1. The Hades2001 USB-serial bridge flakes at 460800 (`idf.py flash`
+     defaults there) — flash at `-b 115200` with raw esptool.
+  2. `@flash_args` carries NO port: esptool then defaults to
+     `/dev/ttyUSB0` — on this bench that is the **CYD** (QR-rig source
+     board). A "hash verified" flash of the wrong board is silent
+     damage. Always pass
+     `--port /dev/serial/by-id/usb-Hades2001_M5stack_49D6163EBE-if00-port0`.
+  3. The bolty-console systemd daemon holds ttyUSB1 open and eats the
+     bootloader sync bytes (esptool: "readiness to read but returned no
+     data"; killing it just respawns): `sudo systemctl stop
+     bolty-console` for the flash window, start it again after.
+  Full spell: `sudo systemctl stop bolty-console && cd build-m5stick &&
+  esptool.py --chip esp32 -b 115200 --port
+  /dev/serial/by-id/usb-Hades2001_M5stack_49D6163EBE-if00-port0
+  --before default_reset --after no_reset write_flash "@flash_args"`,
   then DTR/RTS-reset the chip to boot it.
+- **M5Stick build env**: the root (untracked) `sdkconfig` pins
+  `esp32c3` — building the m5stick target from a clean tree yields a
+  C3 image unless overridden:
+  `IDF_TARGET=esp32 SDKCONFIG=build-m5stick/sdkconfig
+  SDKCONFIG_DEFAULTS='sdkconfig.defaults;sdkconfig.defaults.m5stick'
+  idf.py -B build-m5stick build` (move the root sdkconfig aside if -D
+  flags alone don't take).
 - **Silent console**: if the M5Stick stops answering (usually stuck in
   download mode after a failed flash), force a normal boot over serial:
   `dtr = False`, pulse `rts` True→False (pyserial), then look for the
