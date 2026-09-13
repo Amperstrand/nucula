@@ -13,6 +13,8 @@
 #include "nfc.hpp"
 #include "keypad.h"
 #include "display.h"
+#include "display_st7789.h"
+#include "button.h"
 #include "ui.h"
 
 #include <cstdio>
@@ -321,6 +323,108 @@ static void cmd_i2cscan(const char *arg)
     console_printf("scan done, %d device(s)\r\n", total);
 }
 
+#if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
+#include "rc522.h"
+static void cmd_nfcdump(const char *arg)
+{
+    int start = 0;
+    int pages = 16;
+    if (arg && strlen(arg) > 0) {
+        // "nfcdump [pages] [start]" — start diagnoses geometry caps
+        // (read a high page COLD instead of deep in a 0..N sequence).
+        int n = sscanf(arg, "%d %d", &pages, &start);
+        (void)n;
+    }
+    if (pages <= 0 || pages + start > 64) pages = 16;
+    rc522_field(true); // field is off at idle; radiate for the dump
+    vTaskDelay(pdMS_TO_TICKS(20)); // let a cold tag power up
+    rc522_tag_t tag;
+    if (!rc522_poll(&tag)) {
+        console_print("no tag\r\n");
+        rc522_field(false);
+        return;
+    }
+    console_printf("uid_len=%d uid=", (int)tag.uid_len);
+    for (int i = 0; i < tag.uid_len; i++)
+        console_printf("%02X", tag.uid[i]);
+    console_printf(" sak=%02X\r\n", tag.sak);
+
+    if (tag.sak & 0x20) {
+        // Type 4: dump the NDEF file via ISO-DEP.
+        rc522_isodep_t s;
+        if (!rc522_isodep_connect(&s)) {
+            console_print("ISODEP connect failed\r\n");
+            rc522_field(false);
+            return;
+        }
+        console_printf("isodep: fsc=%d fwt=%lu ms\r\n",
+                       s.fsc, (unsigned long)s.fwt_ms);
+        uint8_t r[70];
+        size_t rl;
+        static const uint8_t SEL_APP[] = {
+            0x00, 0xA4, 0x04, 0x00, 0x07,
+            0xD2, 0x76, 0x00, 0x00, 0x85, 0x01, 0x01, 0x00,
+        };
+        if (!rc522_isodep_exchange(&s, SEL_APP, sizeof(SEL_APP), r, sizeof(r), &rl)) {
+            console_print("NDEF app select: exchange failed\r\n");
+            rc522_isodep_end(&s);
+            rc522_field(false);
+            return;
+        }
+        console_printf("sel app: %d B:", (int)rl);
+        for (size_t i = 0; i < rl; i++)
+            console_printf(" %02X", r[i]);
+        console_print("\r\n");
+
+        static const uint8_t SEL_CC[] = {0x00, 0xA4, 0x00, 0x0C, 0x02, 0xE1, 0x03};
+        static const uint8_t RD[] = {0x00, 0xB0, 0x00, 0x00, 0x0F};
+        if (rc522_isodep_exchange(&s, SEL_CC, sizeof(SEL_CC), r, sizeof(r), &rl) &&
+            rc522_isodep_exchange(&s, RD, sizeof(RD), r, sizeof(r), &rl) &&
+            rl >= 17) {
+            console_printf("cc: len=%d ver=%02x fid=%02X%02X size=%d\r\n",
+                           (r[0] << 8) | r[1], r[2], r[7], r[8],
+                           (r[9] << 8) | r[10]);
+            uint16_t ndef_size = ((uint16_t)r[9] << 8) | r[10];
+            uint8_t sel_file[] = {0x00, 0xA4, 0x00, 0x0C, 0x02, r[7], r[8]};
+            if (rc522_isodep_exchange(&s, sel_file, sizeof(sel_file), r, sizeof(r), &rl)) {
+                console_printf("sel file: %d B, dumping %u B of NDEF\r\n",
+                               (int)rl, (unsigned)ndef_size);
+                for (uint16_t off = 0; off < ndef_size && off < 512; off += 32) {
+                    uint8_t chunk = (uint8_t)((ndef_size - off) < 32 ? (ndef_size - off) : 32);
+                    uint8_t rd[] = {0x00, 0xB0, (uint8_t)((off + 2) >> 8),
+                                    (uint8_t)(off + 2), chunk};
+                    if (!rc522_isodep_exchange(&s, rd, sizeof(rd), r, sizeof(r), &rl)) {
+                        console_printf("%04X: exchange failed\r\n", off);
+                        break;
+                    }
+                    console_printf("%04X:", off);
+                    for (size_t i = 0; i + 2 < rl; i++)
+                        console_printf(" %02X", r[i]);
+                    console_print("\r\n");
+                }
+            }
+        } else {
+            console_print("cc read failed\r\n");
+        }
+        rc522_isodep_end(&s);
+    } else {
+        // Type 2: Ultralight pages.
+        for (int p = start; p < start + pages; p += 4) {
+            uint8_t blk[16];
+            if (!rc522_ul_read((uint8_t)p, blk)) {
+                console_printf("%02X: read failed\r\n", p);
+                break;
+            }
+            console_printf("%02X:", p);
+            for (int i = 0; i < 16; i++)
+                console_printf(" %02X", blk[i]);
+            console_print("\r\n");
+        }
+    }
+    rc522_field(false);
+}
+#endif
+
 static void cmd_i2crecover(const char *arg)
 {
     int clocks = arg && strlen(arg) > 0 ? atoi(arg) : 32;
@@ -392,6 +496,7 @@ void commands_system_register(void)
     console_register_cmd("i2crecover", cmd_i2crecover, "i2crecover <clocks> — clear stuck bus");
 #if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
     console_register_cmd("i2cdump", cmd_i2cdump, "i2cdump <sda> <scl> <addr> — dump regs");
+    console_register_cmd("nfcdump", cmd_nfcdump, "nfcdump [pages] [start] — dump tag pages");
 #endif
 #if CONFIG_NUCULA_BOARD_M5STICK
     console_register_cmd("display", cmd_display, "display <on|off|fill [rgb565]>");
