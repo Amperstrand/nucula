@@ -347,6 +347,13 @@ bool ndef_handle_apdu(const uint8_t *apdu, size_t apdu_len,
 // NDEF message parsing
 // -------------------------------------------------------------------------
 
+#ifdef NUCULA_HOST_TEST
+void ndef_test_reset(void)
+{
+    ndef_init();
+}
+#endif
+
 bool ndef_parse_message(const uint8_t *data, size_t len, std::string &text_out)
 {
     if (len < 2) return false;

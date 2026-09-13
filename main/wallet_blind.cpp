@@ -218,4 +218,16 @@ bool Wallet::unblind_signatures(const std::vector<BlindSignature>& signatures,
     return true;
 }
 
+// NUT-08: blank change outputs needed to cover any change up to
+// max_change, i.e. ceil(log2(max_change + 1)).
+int blank_output_count(int max_change)
+{
+    int n = 0;
+    while (max_change > 0) {
+        n++;
+        max_change >>= 1;
+    }
+    return n;
+}
+
 } // namespace cashu
