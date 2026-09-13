@@ -4,6 +4,37 @@
 
 ---
 
+## 2026-09-13 refresh — the upstream queue as one-issue-per-thing
+
+Everything below Section 1 predates the M5Stick target, the live CE
+wins, and the soak campaign; it remains accurate on mechanics (rebase,
+squash plan, commit anchors) but the ordering and gating have moved on.
+Current rules:
+
+- **Only proven-on-hardware work ships upstream.** Proven now: Atom +
+  M5Stick console + wallet (soak: hundreds of full-token money loops),
+  RC522 T2T read chain, CE small-payload relay e2e, redeem-or-stash.
+  Not yet proven: M5Stick display (panel currently off on our rig),
+  T4T against real cards/phones — those wait for their own PRs.
+- **The queue is tracked as issues on this fork** (#3–#11) so the
+  maintainer can consume our branch as context and reimplement in their
+  own style where preferred:
+  #3 LICENSE → #4 NDEF NLEN fix (trust-builder) → #5 console fixes →
+  #6 board framework + Atom → #7 rc522 driver → #8 reader frontend +
+  nfc_common + T2T fallback → #9 host test infra (the separate
+  "testing framework" MR) → #10 M5Stick (keypad-less by design —
+  probe-and-disable peripherals + USB console REPL covers seed entry
+  and every op; button/display UI is a follow-up) → #11 ACR1252U CE
+  findings as an evidence issue.
+- **Not for upstream, ever:** `rig/` (lab-specific), the DLEQ stripper
+  (contradicts the NUT-12 requirement; it is a rig tool for constrained
+  carriers), WiFi credentials, labgrid configs.
+- Upstream is quiet since 2026-07-20 and has no CONTRIBUTING.md —
+  mirror the style of merged upstream PRs (e.g. `8ad0812`), keep PRs
+  tiny, and let the issue queue carry the context load.
+
+---
+
 ## Current State
 
 **Done and verified:**

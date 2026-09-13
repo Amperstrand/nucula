@@ -208,10 +208,14 @@ async fn main() {
         match result {
             Ok(()) => {
                 soak.consecutive = 0;
+                // Balance per cycle: dense samples make wallet-reset
+                // boundaries (crash-consistency forensics) unambiguous.
+                let bal = read_balance(&mut console).unwrap_or(0);
                 soak.event(
                     "cycle",
                     &[
                         ("amount", amount.to_string()),
+                        ("balance", bal.to_string()),
                         ("secs", format!("{:.2}", t0.elapsed().as_secs_f32())),
                     ],
                 );
