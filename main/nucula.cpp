@@ -22,6 +22,7 @@
 #include "nfc.hpp"
 #include "keypad.h"
 #include "wallet_store.hpp"
+#include "cashu_json.hpp"
 #include "ui.h"
 
 #define TAG "nucula"

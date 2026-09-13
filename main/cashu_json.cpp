@@ -423,14 +423,89 @@ bool from_json_mint_info(const cJSON* j, MintInfo& out) {
 // Blob serialization for NVS persistence
 // ---------------------------------------------------------------------------
 
-std::string proofs_to_json(const std::vector<Proof>& proofs) {
-    cJSON* arr = to_json_array(proofs);
-    if (!arr) return "";
-    char* str = cJSON_PrintUnformatted(arr);
-    std::string result(str ? str : "");
-    if (str) cJSON_free(str);
-    cJSON_Delete(arr);
-    return result;
+namespace {
+struct JsonBuf {
+    char* p = nullptr;
+    size_t n = 0, cap = 0;
+    bool oom = false;
+    void need(size_t extra) {
+        if (oom || n + extra <= cap) return;
+        size_t nc = cap ? cap * 2 : 256;
+        while (nc < n + extra) nc *= 2;
+        char* q = static_cast<char*>(realloc(p, nc));
+        if (!q) { oom = true; return; }
+        p = q;
+        cap = nc;
+    }
+    void ch(char c) { need(1); if (!oom) p[n++] = c; }
+    void raw(const char* s, size_t l) { need(l); if (!oom) { memcpy(p + n, s, l); n += l; } }
+    // Hex-charset fields only ([0-9A-Za-z_-]) — no escaping required.
+    void str(const std::string& s) { ch('"'); raw(s.data(), s.size()); ch('"'); }
+    void esc(const std::string& s) {
+        ch('"');
+        for (char c : s) {
+            switch (c) {
+            case '"':  raw("\\\"", 2); break;
+            case '\\': raw("\\\\", 2); break;
+            case '\n': raw("\\n", 2); break;
+            case '\r': raw("\\r", 2); break;
+            case '\t': raw("\\t", 2); break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char tmp[7];
+                    snprintf(tmp, sizeof tmp, "\\u%04x", c);
+                    raw(tmp, 6);
+                } else {
+                    ch(c);
+                }
+            }
+        }
+        ch('"');
+    }
+};
+} // namespace
+
+char* proofs_to_json_buf(const std::vector<Proof>& proofs, size_t* len) {
+    JsonBuf b;
+    b.need(2 + proofs.size() * 448 + 64);
+    b.ch('[');
+    for (size_t i = 0; i < proofs.size() && !b.oom; i++) {
+        const Proof& p = proofs[i];
+        if (i) b.ch(',');
+        b.ch('{');
+        b.raw("\"id\":", 5);
+        b.str(p.id);
+        char num[40];
+        int nl = snprintf(num, sizeof num, ",\"amount\":%d,\"secret\":", p.amount);
+        b.raw(num, nl);
+        b.str(p.secret);
+        b.raw(",\"C\":", 5);
+        b.str(p.C);
+        if (p.dleq) {
+            b.raw(",\"dleq\":{\"e\":", 13);
+            b.str(p.dleq->e);
+            b.raw(",\"s\":", 5);
+            b.str(p.dleq->s);
+            if (p.dleq->r) {
+                b.raw(",\"r\":", 5);
+                b.str(*p.dleq->r);
+            }
+            b.ch('}');
+        }
+        if (p.witness) {
+            b.raw(",\"witness\":", 11);
+            b.esc(*p.witness);
+        }
+        b.ch('}');
+    }
+    b.ch(']');
+    if (b.oom) {
+        free(b.p);
+        if (len) *len = 0;
+        return nullptr;
+    }
+    if (len) *len = b.n;
+    return b.p;
 }
 
 bool proofs_from_json(const char* json_str, std::vector<Proof>& out) {

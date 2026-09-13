@@ -29,6 +29,7 @@
 #include "driver/i2c_master.h"
 #include "i2c_bus.h"
 #include "wallet_wstat.h"
+#include "cashu_json.hpp"
 #include <nvs.h>
 
 #define TAG "nucula"
@@ -437,7 +438,7 @@ static void cmd_wstat(const char *)
                    s->loaded_proofs, (unsigned long)s->load_fails);
     nvs_stats_t st = {};
     if (nvs_get_stats("nvs", &st) == ESP_OK) {
-        console_printf("nvs entries: used=%d free=%d total=%d\r\n",
+            console_printf("nvs entries: used=%d free=%d total=%d\r\n",
                        st.used_entries, st.free_entries, st.total_entries);
     }
 }

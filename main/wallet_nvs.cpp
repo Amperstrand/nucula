@@ -83,31 +83,50 @@ extern "C" wallet_nvs_stat_t g_wallet_nvs_stat = {};
 
 bool Wallet::save_proofs()
 {
-    std::string blob = proofs_to_json(proofs_);
-    // proofs_to_json returns "" only on allocation failure ("[]" for an
-    // empty wallet). Never let that overwrite stored proofs with nothing —
-    // they are bearer money.
-    if (blob.empty() && !proofs_.empty()) {
-        ESP_LOGE(TAG, "save_proofs: serialization failed, keeping stored proofs");
+    // Fail-stop bound (PERSISTENCE-DESIGN discipline): refuse to run on
+    // state that could never persist, loudly, instead of silently
+    // degrading to a RAM-only wallet — the nucula#1 bug class.
+    static constexpr size_t PROOFS_BLOB_MAX = 32 * 1024;
+
+    size_t blob_len = 0;
+    char* blob = proofs_to_json_buf(proofs_, &blob_len);
+    if (!blob) {
+        ESP_LOGE(TAG, "save_proofs: serialization allocation failed (%d proofs) — wallet is RAM-ONLY until this clears",
+                 (int)proofs_.size());
         g_wallet_nvs_stat.save_fails++;
         g_wallet_nvs_stat.last_save_ok = false;
         g_wallet_nvs_stat.last_err = -1;
         g_wallet_nvs_stat.last_blob = 0;
         return false;
     }
-    g_wallet_nvs_stat.last_blob = blob.size();
+    g_wallet_nvs_stat.last_blob = blob_len;
+
+    if (blob_len > PROOFS_BLOB_MAX) {
+        free(blob);
+        ESP_LOGE(TAG, "save_proofs: blob %u B exceeds the %u B bound — wallet is RAM-ONLY",
+                 (unsigned)blob_len, (unsigned)PROOFS_BLOB_MAX);
+        g_wallet_nvs_stat.save_fails++;
+        g_wallet_nvs_stat.last_save_ok = false;
+        g_wallet_nvs_stat.last_err = -2;
+        return false;
+    }
 
     Nvs nvs(NVS_READWRITE);
     if (!nvs.ok()) {
+        free(blob);
         ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(nvs.err()));
+        g_wallet_nvs_stat.save_fails++;
+        g_wallet_nvs_stat.last_save_ok = false;
+        g_wallet_nvs_stat.last_err = nvs.err();
         return false;
     }
 
     char key[16];
     slot_key(key, sizeof(key), "proofs", nvs_slot_);
-    esp_err_t err = nvs_set_blob(nvs.get(), key, blob.data(), blob.size());
+    esp_err_t err = nvs_set_blob(nvs.get(), key, blob, blob_len);
     if (err == ESP_OK)
         err = nvs_commit(nvs.get());
+    free(blob);
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "save_proofs failed: %s", esp_err_to_name(err));
@@ -119,8 +138,8 @@ bool Wallet::save_proofs()
     g_wallet_nvs_stat.saves++;
     g_wallet_nvs_stat.last_save_ok = true;
     g_wallet_nvs_stat.last_err = 0;
-    ESP_LOGW(TAG, "[%d] saved %d proofs (%d bytes)",
-             nvs_slot_, (int)proofs_.size(), (int)blob.size());
+    ESP_LOGW(TAG, "[%d] saved %d proofs (%u bytes)",
+             nvs_slot_, (int)proofs_.size(), (unsigned)blob_len);
     return true;
 }
 

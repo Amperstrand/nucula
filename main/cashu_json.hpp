@@ -90,7 +90,13 @@ bool from_json_mint_info(const cJSON* j, MintInfo& out);
 bool cashu_json_run_tests();
 
 // Blob serialization for NVS persistence
-std::string proofs_to_json(const std::vector<Proof>& proofs);
+// Streaming NVS-blob serializer: returns a malloc'd buffer (caller
+// frees) and its length, or nullptr on allocation failure. The cJSON
+// tree+print+copy path needed three full transients and failed above
+// ~60 proofs on the ESP32 heap (nucula#1). Hex-only fields are written
+// raw; `witness` is the only escaped string.
+char* proofs_to_json_buf(const std::vector<Proof>& proofs, size_t* len);
+
 bool proofs_from_json(const char* json_str, std::vector<Proof>& out);
 bool keysets_from_json(const char* json_str, std::vector<Keyset>& out);
 
