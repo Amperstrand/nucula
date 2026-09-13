@@ -9,4 +9,12 @@ menu "Nucula"
             of boot time; the same tests are always available at runtime
             via the 'selftest' console command.
 
+        config NUCULA_BOARD_ATOM
+            bool "M5Stack Atom Matrix + MFRC522 (NFC reader mode)"
+            help
+                M5Stack Atom with an MFRC522 on the Grove I2C port.
+                NFC role: the wallet is the READER and receives cashu
+                tokens from a Type 2 NDEF tag (e.g. an ACR1252 in
+                MIFARE Ultralight card-emulation mode, or a real NTAG).
+
 endmenu

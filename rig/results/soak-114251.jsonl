@@ -1,0 +1,9 @@
+{"ts":1789299771,"cycle":0,"kind":"start","hours":"1","log":"\"/home/ubuntu/src/nucula/rig/results/soak-114251.jsonl\""}
+{"ts":1789299772,"cycle":0,"kind":"rig","report":"lock: labgrid place + flock\nacr:  up (ACR1252U_V101.0), polling=0x8F None\natom: console up, wifi up None\nmint: 192.168.13.221:3338 reachable"}
+{"ts":1789299774,"cycle":1,"kind":"cycle","amount":"1","secs":"1.93"}
+{"ts":1789299782,"cycle":2,"kind":"cycle","amount":"2","secs":"2.27"}
+{"ts":1789299789,"cycle":3,"kind":"cycle","amount":"5","secs":"2.36"}
+{"ts":1789299797,"cycle":4,"kind":"cycle","amount":"21","secs":"3.13"}
+{"ts":1789299806,"cycle":5,"kind":"cycle","amount":"42","secs":"4.45"}
+{"ts":1789299816,"cycle":6,"kind":"fail","amount":"1","error":"receive did not complete: E (881900) wallet: save_proofs: serialization fa"}
+{"ts":1789300026,"cycle":6,"kind":"abort","reason":"console lost after reboot"}

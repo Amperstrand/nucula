@@ -1,0 +1,137 @@
+[0/1] Re-running CMake...
+-- Building ESP-IDF components for target esp32
+NOTICE: Updating lock file at /home/ubuntu/src/nucula/dependencies.lock
+NOTICE: Processing 2 dependencies:
+NOTICE: [1/2] espressif/cbor (0.6.1~4)
+NOTICE: [2/2] idf (5.4.1)
+-- Project sdkconfig file /home/ubuntu/src/nucula/sdkconfig.atom
+Loading defaults file /home/ubuntu/src/nucula/sdkconfig.defaults...
+warning: unknown kconfig symbol 'I2C_MASTER_ISR_HANDLER_IN_IRAM' assigned to 'y' in /home/ubuntu/src/nucula/sdkconfig.defaults
+Loading defaults file /home/ubuntu/src/nucula/sdkconfig.defaults.atom...
+warning: unknown kconfig symbol 'I2C_MASTER_ISR_HANDLER_IN_IRAM' assigned to 'y' in /home/ubuntu/src/nucula/sdkconfig.defaults.atom
+-- Compiler supported targets: xtensa-esp-elf
+-- App "nucula" version: 8ad0812-dirty
+-- Adding linker script /home/ubuntu/src/nucula/build-atom/esp-idf/esp_system/ld/memory.ld
+-- Adding linker script /home/ubuntu/src/nucula/build-atom/esp-idf/esp_system/ld/sections.ld.in
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.api.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.libgcc.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.newlib-data.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.syscalls.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.newlib-funcs.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/soc/esp32/ld/esp32.peripherals.ld
+-- Components: app_trace app_update bootloader bootloader_support bt cmock console cxx driver efuse esp-tls esp_adc esp_app_format esp_bootloader_format esp_coex esp_common esp_driver_ana_cmpr esp_driver_cam esp_driver_dac esp_driver_gpio esp_driver_gptimer esp_driver_i2c esp_driver_i2s esp_driver_isp esp_driver_jpeg esp_driver_ledc esp_driver_mcpwm esp_driver_parlio esp_driver_pcnt esp_driver_ppa esp_driver_rmt esp_driver_sdio esp_driver_sdm esp_driver_sdmmc esp_driver_sdspi esp_driver_spi esp_driver_touch_sens esp_driver_tsens esp_driver_uart esp_driver_usb_serial_jtag esp_eth esp_event esp_gdbstub esp_hid esp_http_client esp_http_server esp_https_ota esp_https_server esp_hw_support esp_lcd esp_local_ctrl esp_mm esp_netif esp_netif_stack esp_partition esp_phy esp_pm esp_psram esp_ringbuf esp_rom esp_security esp_system esp_timer esp_vfs_console esp_wifi espcoredump espressif__cbor esptool_py fatfs freertos hal heap http_parser idf_test ieee802154 json log lwip main mbedtls mqtt newlib nvs_flash nvs_sec_provider openthread partition_table perfmon pn7160 protobuf-c protocomm pthread rc522 rt sdmmc secp256k1 soc spi_flash spiffs tcp_transport ulp unity usb vfs wear_levelling wifi_provisioning wpa_supplicant xtensa
+-- Component paths: /home/ubuntu/esp/esp-idf/components/app_trace /home/ubuntu/esp/esp-idf/components/app_update /home/ubuntu/esp/esp-idf/components/bootloader /home/ubuntu/esp/esp-idf/components/bootloader_support /home/ubuntu/esp/esp-idf/components/bt /home/ubuntu/esp/esp-idf/components/cmock /home/ubuntu/esp/esp-idf/components/console /home/ubuntu/esp/esp-idf/components/cxx /home/ubuntu/esp/esp-idf/components/driver /home/ubuntu/esp/esp-idf/components/efuse /home/ubuntu/esp/esp-idf/components/esp-tls /home/ubuntu/esp/esp-idf/components/esp_adc /home/ubuntu/esp/esp-idf/components/esp_app_format /home/ubuntu/esp/esp-idf/components/esp_bootloader_format /home/ubuntu/esp/esp-idf/components/esp_coex /home/ubuntu/esp/esp-idf/components/esp_common /home/ubuntu/esp/esp-idf/components/esp_driver_ana_cmpr /home/ubuntu/esp/esp-idf/components/esp_driver_cam /home/ubuntu/esp/esp-idf/components/esp_driver_dac /home/ubuntu/esp/esp-idf/components/esp_driver_gpio /home/ubuntu/esp/esp-idf/components/esp_driver_gptimer /home/ubuntu/esp/esp-idf/components/esp_driver_i2c /home/ubuntu/esp/esp-idf/components/esp_driver_i2s /home/ubuntu/esp/esp-idf/components/esp_driver_isp /home/ubuntu/esp/esp-idf/components/esp_driver_jpeg /home/ubuntu/esp/esp-idf/components/esp_driver_ledc /home/ubuntu/esp/esp-idf/components/esp_driver_mcpwm /home/ubuntu/esp/esp-idf/components/esp_driver_parlio /home/ubuntu/esp/esp-idf/components/esp_driver_pcnt /home/ubuntu/esp/esp-idf/components/esp_driver_ppa /home/ubuntu/esp/esp-idf/components/esp_driver_rmt /home/ubuntu/esp/esp-idf/components/esp_driver_sdio /home/ubuntu/esp/esp-idf/components/esp_driver_sdm /home/ubuntu/esp/esp-idf/components/esp_driver_sdmmc /home/ubuntu/esp/esp-idf/components/esp_driver_sdspi /home/ubuntu/esp/esp-idf/components/esp_driver_spi /home/ubuntu/esp/esp-idf/components/esp_driver_touch_sens /home/ubuntu/esp/esp-idf/components/esp_driver_tsens /home/ubuntu/esp/esp-idf/components/esp_driver_uart /home/ubuntu/esp/esp-idf/components/esp_driver_usb_serial_jtag /home/ubuntu/esp/esp-idf/components/esp_eth /home/ubuntu/esp/esp-idf/components/esp_event /home/ubuntu/esp/esp-idf/components/esp_gdbstub /home/ubuntu/esp/esp-idf/components/esp_hid /home/ubuntu/esp/esp-idf/components/esp_http_client /home/ubuntu/esp/esp-idf/components/esp_http_server /home/ubuntu/esp/esp-idf/components/esp_https_ota /home/ubuntu/esp/esp-idf/components/esp_https_server /home/ubuntu/esp/esp-idf/components/esp_hw_support /home/ubuntu/esp/esp-idf/components/esp_lcd /home/ubuntu/esp/esp-idf/components/esp_local_ctrl /home/ubuntu/esp/esp-idf/components/esp_mm /home/ubuntu/esp/esp-idf/components/esp_netif /home/ubuntu/esp/esp-idf/components/esp_netif_stack /home/ubuntu/esp/esp-idf/components/esp_partition /home/ubuntu/esp/esp-idf/components/esp_phy /home/ubuntu/esp/esp-idf/components/esp_pm /home/ubuntu/esp/esp-idf/components/esp_psram /home/ubuntu/esp/esp-idf/components/esp_ringbuf /home/ubuntu/esp/esp-idf/components/esp_rom /home/ubuntu/esp/esp-idf/components/esp_security /home/ubuntu/esp/esp-idf/components/esp_system /home/ubuntu/esp/esp-idf/components/esp_timer /home/ubuntu/esp/esp-idf/components/esp_vfs_console /home/ubuntu/esp/esp-idf/components/esp_wifi /home/ubuntu/esp/esp-idf/components/espcoredump /home/ubuntu/src/nucula/managed_components/espressif__cbor /home/ubuntu/esp/esp-idf/components/esptool_py /home/ubuntu/esp/esp-idf/components/fatfs /home/ubuntu/esp/esp-idf/components/freertos /home/ubuntu/esp/esp-idf/components/hal /home/ubuntu/esp/esp-idf/components/heap /home/ubuntu/esp/esp-idf/components/http_parser /home/ubuntu/esp/esp-idf/components/idf_test /home/ubuntu/esp/esp-idf/components/ieee802154 /home/ubuntu/esp/esp-idf/components/json /home/ubuntu/esp/esp-idf/components/log /home/ubuntu/esp/esp-idf/components/lwip /home/ubuntu/src/nucula/main /home/ubuntu/esp/esp-idf/components/mbedtls /home/ubuntu/esp/esp-idf/components/mqtt /home/ubuntu/esp/esp-idf/components/newlib /home/ubuntu/esp/esp-idf/components/nvs_flash /home/ubuntu/esp/esp-idf/components/nvs_sec_provider /home/ubuntu/esp/esp-idf/components/openthread /home/ubuntu/esp/esp-idf/components/partition_table /home/ubuntu/esp/esp-idf/components/perfmon /home/ubuntu/src/nucula/components/pn7160 /home/ubuntu/esp/esp-idf/components/protobuf-c /home/ubuntu/esp/esp-idf/components/protocomm /home/ubuntu/esp/esp-idf/components/pthread /home/ubuntu/src/nucula/components/rc522 /home/ubuntu/esp/esp-idf/components/rt /home/ubuntu/esp/esp-idf/components/sdmmc /home/ubuntu/src/nucula/components/secp256k1 /home/ubuntu/esp/esp-idf/components/soc /home/ubuntu/esp/esp-idf/components/spi_flash /home/ubuntu/esp/esp-idf/components/spiffs /home/ubuntu/esp/esp-idf/components/tcp_transport /home/ubuntu/esp/esp-idf/components/ulp /home/ubuntu/esp/esp-idf/components/unity /home/ubuntu/esp/esp-idf/components/usb /home/ubuntu/esp/esp-idf/components/vfs /home/ubuntu/esp/esp-idf/components/wear_levelling /home/ubuntu/esp/esp-idf/components/wifi_provisioning /home/ubuntu/esp/esp-idf/components/wpa_supplicant /home/ubuntu/esp/esp-idf/components/xtensa
+-- Configuring done (6.7s)
+-- Generating done (0.7s)
+-- Build files have been written to: /home/ubuntu/src/nucula/build-atom
+[1/8] Performing build step for 'bootloader'
+[0/1] Re-running CMake...
+-- Building ESP-IDF components for target esp32
+-- Project sdkconfig file /home/ubuntu/src/nucula/sdkconfig.atom
+-- Compiler supported targets: xtensa-esp-elf
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/soc/esp32/ld/esp32.peripherals.ld
+-- Bootloader project name: "bootloader" version: 1
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.api.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.libgcc.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.newlib-funcs.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/bootloader/subproject/main/ld/esp32/bootloader.ld
+-- Adding linker script /home/ubuntu/esp/esp-idf/components/bootloader/subproject/main/ld/esp32/bootloader.rom.ld
+-- Components: bootloader bootloader_support efuse esp_app_format esp_bootloader_format esp_common esp_hw_support esp_rom esp_security esp_system esptool_py freertos hal log main micro-ecc newlib partition_table soc spi_flash xtensa
+-- Component paths: /home/ubuntu/esp/esp-idf/components/bootloader /home/ubuntu/esp/esp-idf/components/bootloader_support /home/ubuntu/esp/esp-idf/components/efuse /home/ubuntu/esp/esp-idf/components/esp_app_format /home/ubuntu/esp/esp-idf/components/esp_bootloader_format /home/ubuntu/esp/esp-idf/components/esp_common /home/ubuntu/esp/esp-idf/components/esp_hw_support /home/ubuntu/esp/esp-idf/components/esp_rom /home/ubuntu/esp/esp-idf/components/esp_security /home/ubuntu/esp/esp-idf/components/esp_system /home/ubuntu/esp/esp-idf/components/esptool_py /home/ubuntu/esp/esp-idf/components/freertos /home/ubuntu/esp/esp-idf/components/hal /home/ubuntu/esp/esp-idf/components/log /home/ubuntu/esp/esp-idf/components/bootloader/subproject/main /home/ubuntu/esp/esp-idf/components/bootloader/subproject/components/micro-ecc /home/ubuntu/esp/esp-idf/components/newlib /home/ubuntu/esp/esp-idf/components/partition_table /home/ubuntu/esp/esp-idf/components/soc /home/ubuntu/esp/esp-idf/components/spi_flash /home/ubuntu/esp/esp-idf/components/xtensa
+-- Configuring done (3.8s)
+-- Generating done (0.1s)
+-- Build files have been written to: /home/ubuntu/src/nucula/build-atom/bootloader
+[1/1] cd /home/ubuntu/src/nucula/build-atom/bootloader/esp-idf/esptool_py && /home/ubuntu/.espressif/python_env/idf5.4_py3.12_env/bin/python /home/ubuntu/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /home/ubuntu/src/nucula/build-atom/bootloader/bootloader.bin
+Bootloader binary size 0x6580 bytes. 0xa80 bytes (9%) free.
+[2/8] No install step for 'bootloader'
+[3/8] Completed 'bootloader'
+[4/8] Generating ld/sections.ld
+warning: config BTDM_CTRL_CONTROLLER_DEBUG_MODE_1 (defined at /home/ubuntu/esp/esp-idf/components/bt/controller/esp32/Kconfig.in:537) has a "visible if" option, which is not supported for configs
+[5/8] Linking CXX executable nucula.elf
+[6/8] Generating binary image from built executable
+esptool.py v4.12.0
+Creating esp32 image...
+Merged 2 ELF sections
+Successfully created esp32 image.
+Generated /home/ubuntu/src/nucula/build-atom/nucula.bin
+[7/8] cd /home/ubuntu/src/nucula/build-atom/esp-idf/esptool_py && /home/ubuntu/.espressif/python_env/idf5.4_py3.12_env/bin/python /home/ubuntu/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/ubuntu/src/nucula/build-atom/partition_table/partition-table.bin /home/ubuntu/src/nucula/build-atom/nucula.bin
+nucula.bin binary size 0x10c160 bytes. Smallest app partition is 0x1d0000 bytes. 0xc3ea0 bytes (42%) free.
+[7/8] cd /home/ubuntu/esp/esp-idf/components/esptool_py && /usr/bin/cmake -D IDF_PATH=/home/ubuntu/esp/esp-idf -D "SERIAL_TOOL=/home/ubuntu/.espressif/python_env/idf5.4_py3.12_env/bin/python;;/home/ubuntu/esp/esp-idf/components/esptool_py/esptool/esptool.py;--chip;esp32" -D "SERIAL_TOOL_ARGS=--before=default_reset;--after=hard_reset;write_flash;@flash_args" -D WORKING_DIRECTORY=/home/ubuntu/src/nucula/build-atom -P /home/ubuntu/esp/esp-idf/components/esptool_py/run_serial_tool.cmake
+esptool.py --chip esp32 -p /dev/serial/by-id/usb-M5STACK_Inc._M5_Serial_Converter_9D529068B4-if00-port0 -b 115200 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 40m --flash_size 4MB 0x1000 bootloader/bootloader.bin 0x30000 nucula.bin 0x8000 partition_table/partition-table.bin
+esptool.py v4.12.0
+Serial port /dev/serial/by-id/usb-M5STACK_Inc._M5_Serial_Converter_9D529068B4-if00-port0
+Connecting....
+Chip is ESP32-PICO-D4 (revision v1.0)
+Features: WiFi, BT, Dual Core, 240MHz, Embedded Flash, VRef calibration in efuse, Coding Scheme None
+Crystal is 40MHz
+MAC: d8:a0:1d:5e:70:7c
+Uploading stub...
+Running stub...
+Stub running...
+Configuring flash size...
+Flash will be erased from 0x00001000 to 0x00007fff...
+Flash will be erased from 0x00030000 to 0x0013cfff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+SHA digest in image updated
+Compressed 25984 bytes to 16377...
+Writing at 0x00001000... (100 %)
+Wrote 25984 bytes (16377 compressed) at 0x00001000 in 1.8 seconds (effective 112.5 kbit/s)...
+Hash of data verified.
+Compressed 1098080 bytes to 741125...
+Writing at 0x00030000... (2 %)
+Writing at 0x00039e06... (4 %)
+Writing at 0x00045880... (6 %)
+Writing at 0x0004ead4... (8 %)
+Writing at 0x00052a8d... (10 %)
+Writing at 0x00057002... (13 %)
+Writing at 0x0005bca7... (15 %)
+Writing at 0x00060c53... (17 %)
+Writing at 0x000663f7... (19 %)
+Writing at 0x0006e008... (21 %)
+Writing at 0x00077e4e... (23 %)
+Writing at 0x0007d449... (26 %)
+Writing at 0x00082eb9... (28 %)
+Writing at 0x0008817c... (30 %)
+Writing at 0x0008d71c... (32 %)
+Writing at 0x00092d47... (34 %)
+Writing at 0x000980ce... (36 %)
+Writing at 0x0009d28e... (39 %)
+Writing at 0x000a2a8f... (41 %)
+Writing at 0x000a8690... (43 %)
+Writing at 0x000adf57... (45 %)
+Writing at 0x000b38b8... (47 %)
+Writing at 0x000b8a35... (50 %)
+Writing at 0x000bdef9... (52 %)
+Writing at 0x000c381d... (54 %)
+Writing at 0x000c8b42... (56 %)
+Writing at 0x000ce162... (58 %)
+Writing at 0x000d3209... (60 %)
+Writing at 0x000d85a9... (63 %)
+Writing at 0x000de046... (65 %)
+Writing at 0x000e334e... (67 %)
+Writing at 0x000e86d7... (69 %)
+Writing at 0x000edf17... (71 %)
+Writing at 0x000f34c7... (73 %)
+Writing at 0x000f87bd... (76 %)
+Writing at 0x000fdc21... (78 %)
+Writing at 0x00102eb3... (80 %)
+Writing at 0x00108066... (82 %)
+Writing at 0x0010d8de... (84 %)
+Writing at 0x001131d2... (86 %)
+Writing at 0x001190a2... (89 %)
+Writing at 0x00122e33... (91 %)
+Writing at 0x0012a3a0... (93 %)
+Writing at 0x0012fbde... (95 %)
+Writing at 0x001357a7... (97 %)
+Writing at 0x0013aa15... (100 %)
+Wrote 1098080 bytes (741125 compressed) at 0x00030000 in 65.8 seconds (effective 133.4 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 106...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (106 compressed) at 0x00008000 in 0.1 seconds (effective 361.3 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...

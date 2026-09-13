@@ -1,0 +1,2 @@
+source /home/ubuntu/src/nucula/build-atom/gdbinit/symbols
+source /home/ubuntu/src/nucula/build-atom/gdbinit/connect

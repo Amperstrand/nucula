@@ -1,0 +1,18 @@
+[1/9] Performing build step for 'bootloader'
+[1/1] cd /home/ubuntu/src/nucula/build-atom/bootloader/esp-idf/esptool_py && /home/ubuntu/.espressif/python_env/idf5.4_py3.12_env/bin/python /home/ubuntu/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /home/ubuntu/src/nucula/build-atom/bootloader/bootloader.bin
+Bootloader binary size 0x6580 bytes. 0xa80 bytes (9%) free.
+[2/9] No install step for 'bootloader'
+[3/9] Completed 'bootloader'
+[4/9] Building C object esp-idf/main/CMakeFiles/__idf_main.dir/wifi.c.obj
+[5/9] Linking C static library esp-idf/main/libmain.a
+[6/9] Generating ld/sections.ld
+warning: config BTDM_CTRL_CONTROLLER_DEBUG_MODE_1 (defined at /home/ubuntu/esp/esp-idf/components/bt/controller/esp32/Kconfig.in:537) has a "visible if" option, which is not supported for configs
+[7/9] Linking CXX executable nucula.elf
+[8/9] Generating binary image from built executable
+esptool.py v4.12.0
+Creating esp32 image...
+Merged 2 ELF sections
+Successfully created esp32 image.
+Generated /home/ubuntu/src/nucula/build-atom/nucula.bin
+[9/9] cd /home/ubuntu/src/nucula/build-atom/esp-idf/esptool_py && /home/ubuntu/.espressif/python_env/idf5.4_py3.12_env/bin/python /home/ubuntu/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/ubuntu/src/nucula/build-atom/partition_table/partition-table.bin /home/ubuntu/src/nucula/build-atom/nucula.bin
+nucula.bin binary size 0x10b860 bytes. Smallest app partition is 0x1d0000 bytes. 0xc47a0 bytes (42%) free.

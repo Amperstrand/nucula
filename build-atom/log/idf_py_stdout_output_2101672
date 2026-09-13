@@ -1,0 +1,95 @@
+[1/10] Performing build step for 'bootloader'
+[1/1] cd /home/ubuntu/src/nucula/build-atom/bootloader/esp-idf/esptool_py && /home/ubuntu/.espressif/python_env/idf5.4_py3.12_env/bin/python /home/ubuntu/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 bootloader 0x1000 /home/ubuntu/src/nucula/build-atom/bootloader/bootloader.bin
+Bootloader binary size 0x6580 bytes. 0xa80 bytes (9%) free.
+[2/10] No install step for 'bootloader'
+[3/10] Completed 'bootloader'
+[4/10] Building C object esp-idf/rc522/CMakeFiles/__idf_rc522.dir/rc522.c.obj
+[5/10] Linking C static library esp-idf/rc522/librc522.a
+[6/10] Generating ld/sections.ld
+warning: config BTDM_CTRL_CONTROLLER_DEBUG_MODE_1 (defined at /home/ubuntu/esp/esp-idf/components/bt/controller/esp32/Kconfig.in:537) has a "visible if" option, which is not supported for configs
+[7/10] Linking CXX executable nucula.elf
+[8/10] Generating binary image from built executable
+esptool.py v4.12.0
+Creating esp32 image...
+Merged 2 ELF sections
+Successfully created esp32 image.
+Generated /home/ubuntu/src/nucula/build-atom/nucula.bin
+[9/10] cd /home/ubuntu/src/nucula/build-atom/esp-idf/esptool_py && /home/ubuntu/.espressif/python_env/idf5.4_py3.12_env/bin/python /home/ubuntu/esp/esp-idf/components/partition_table/check_sizes.py --offset 0x8000 partition --type app /home/ubuntu/src/nucula/build-atom/partition_table/partition-table.bin /home/ubuntu/src/nucula/build-atom/nucula.bin
+nucula.bin binary size 0x10c160 bytes. Smallest app partition is 0x1d0000 bytes. 0xc3ea0 bytes (42%) free.
+[9/10] cd /home/ubuntu/esp/esp-idf/components/esptool_py && /usr/bin/cmake -D IDF_PATH=/home/ubuntu/esp/esp-idf -D "SERIAL_TOOL=/home/ubuntu/.espressif/python_env/idf5.4_py3.12_env/bin/python;;/home/ubuntu/esp/esp-idf/components/esptool_py/esptool/esptool.py;--chip;esp32" -D "SERIAL_TOOL_ARGS=--before=default_reset;--after=hard_reset;write_flash;@flash_args" -D WORKING_DIRECTORY=/home/ubuntu/src/nucula/build-atom -P /home/ubuntu/esp/esp-idf/components/esptool_py/run_serial_tool.cmake
+esptool.py --chip esp32 -p /dev/serial/by-id/usb-M5STACK_Inc._M5_Serial_Converter_9D529068B4-if00-port0 -b 115200 --before=default_reset --after=hard_reset write_flash --flash_mode dio --flash_freq 40m --flash_size 4MB 0x1000 bootloader/bootloader.bin 0x30000 nucula.bin 0x8000 partition_table/partition-table.bin
+esptool.py v4.12.0
+Serial port /dev/serial/by-id/usb-M5STACK_Inc._M5_Serial_Converter_9D529068B4-if00-port0
+Connecting....
+Chip is ESP32-PICO-D4 (revision v1.0)
+Features: WiFi, BT, Dual Core, 240MHz, Embedded Flash, VRef calibration in efuse, Coding Scheme None
+Crystal is 40MHz
+MAC: d8:a0:1d:5e:70:7c
+Uploading stub...
+Running stub...
+Stub running...
+Configuring flash size...
+Flash will be erased from 0x00001000 to 0x00007fff...
+Flash will be erased from 0x00030000 to 0x0013cfff...
+Flash will be erased from 0x00008000 to 0x00008fff...
+SHA digest in image updated
+Compressed 25984 bytes to 16377...
+Writing at 0x00001000... (100 %)
+Wrote 25984 bytes (16377 compressed) at 0x00001000 in 1.9 seconds (effective 112.2 kbit/s)...
+Hash of data verified.
+Compressed 1098080 bytes to 741122...
+Writing at 0x00030000... (2 %)
+Writing at 0x00039e0f... (4 %)
+Writing at 0x00045883... (6 %)
+Writing at 0x0004ead5... (8 %)
+Writing at 0x00052a8e... (10 %)
+Writing at 0x00057003... (13 %)
+Writing at 0x0005bca8... (15 %)
+Writing at 0x00060c54... (17 %)
+Writing at 0x000663f8... (19 %)
+Writing at 0x0006e00c... (21 %)
+Writing at 0x00077e4f... (23 %)
+Writing at 0x0007d451... (26 %)
+Writing at 0x00082eba... (28 %)
+Writing at 0x0008817c... (30 %)
+Writing at 0x0008d71d... (32 %)
+Writing at 0x00092d48... (34 %)
+Writing at 0x000980cf... (36 %)
+Writing at 0x0009d290... (39 %)
+Writing at 0x000a2a90... (41 %)
+Writing at 0x000a8698... (43 %)
+Writing at 0x000adf58... (45 %)
+Writing at 0x000b38b8... (47 %)
+Writing at 0x000b8a38... (50 %)
+Writing at 0x000bdefa... (52 %)
+Writing at 0x000c3820... (54 %)
+Writing at 0x000c8b46... (56 %)
+Writing at 0x000ce163... (58 %)
+Writing at 0x000d320a... (60 %)
+Writing at 0x000d85a9... (63 %)
+Writing at 0x000de047... (65 %)
+Writing at 0x000e334f... (67 %)
+Writing at 0x000e86d7... (69 %)
+Writing at 0x000edf18... (71 %)
+Writing at 0x000f34cc... (73 %)
+Writing at 0x000f87be... (76 %)
+Writing at 0x000fdc22... (78 %)
+Writing at 0x00102eb4... (80 %)
+Writing at 0x00108069... (82 %)
+Writing at 0x0010d8df... (84 %)
+Writing at 0x001131d4... (86 %)
+Writing at 0x001190a3... (89 %)
+Writing at 0x00122e34... (91 %)
+Writing at 0x0012a3a4... (93 %)
+Writing at 0x0012fbe0... (95 %)
+Writing at 0x001357a8... (97 %)
+Writing at 0x0013aa1d... (100 %)
+Wrote 1098080 bytes (741122 compressed) at 0x00030000 in 65.8 seconds (effective 133.4 kbit/s)...
+Hash of data verified.
+Compressed 3072 bytes to 106...
+Writing at 0x00008000... (100 %)
+Wrote 3072 bytes (106 compressed) at 0x00008000 in 0.1 seconds (effective 361.3 kbit/s)...
+Hash of data verified.
+
+Leaving...
+Hard resetting via RTS pin...

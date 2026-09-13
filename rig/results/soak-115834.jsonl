@@ -1,0 +1,25 @@
+{"ts":1789300730,"cycle":3,"kind":"cycle","amount":"5","secs":"2.03"}
+{"ts":1789300737,"cycle":4,"kind":"cycle","amount":"21","secs":"2.69"}
+{"ts":1789300745,"cycle":5,"kind":"cycle","amount":"42","secs":"3.00"}
+{"ts":1789300756,"cycle":6,"kind":"cycle","amount":"1","secs":"5.57"}
+{"ts":1789300762,"cycle":7,"kind":"cycle","amount":"2","secs":"1.43"}
+{"ts":1789300769,"cycle":8,"kind":"cycle","amount":"5","secs":"1.87"}
+{"ts":1789300777,"cycle":9,"kind":"cycle","amount":"21","secs":"2.49"}
+{"ts":1789300785,"cycle":10,"kind":"cycle","amount":"42","secs":"3.38"}
+{"ts":1789300790,"cycle":10,"kind":"snapshot","heap":"heap\r\nfree:          103972\r\nlargest block: 34816\r\nmin ever free: 16\r\nnucula> \r\nnucula>","tasks":"tasks\r\nname             prio  stack-min\r\nconsole             5       5028\r\nIDLE1               0        948\r\nIDLE0               0        952\r\nwifi_drain          4       6868\r\nwifi_sup            3       3392\r\ntiT                18       2104\r\nTmr Svc             1       1616\r\nipc1               24        512\r\nsys_evt            20       1824\r\nwifi               23       4356\r\nesp_timer          22       3328\r\nipc0               24        520\r\nnucula> \r\nnucula>"}
+{"ts":1789300792,"cycle":11,"kind":"cycle","amount":"1","secs":"1.47"}
+{"ts":1789300798,"cycle":12,"kind":"cycle","amount":"2","secs":"1.77"}
+{"ts":1789300805,"cycle":13,"kind":"cycle","amount":"5","secs":"2.07"}
+{"ts":1789300813,"cycle":14,"kind":"cycle","amount":"21","secs":"2.53"}
+{"ts":1789300821,"cycle":15,"kind":"cycle","amount":"42","secs":"3.37"}
+{"ts":1789300828,"cycle":16,"kind":"cycle","amount":"1","secs":"1.56"}
+{"ts":1789300834,"cycle":17,"kind":"cycle","amount":"2","secs":"1.56"}
+{"ts":1789300842,"cycle":18,"kind":"cycle","amount":"5","secs":"2.27"}
+{"ts":1789300853,"cycle":19,"kind":"cycle","amount":"21","secs":"6.18"}
+{"ts":1789300862,"cycle":20,"kind":"cycle","amount":"42","secs":"3.98"}
+{"ts":1789300867,"cycle":20,"kind":"snapshot","heap":"heap\r\nfree:          96056\r\nlargest block: 34816\r\nmin ever free: 16\r\nnucula> \r\nnucula>","tasks":"tasks\r\nname             prio  stack-min\r\nconsole             5       5028\r\nIDLE1               0        948\r\nIDLE0               0        952\r\nwifi_drain          4       6868\r\nwifi_sup            3       3392\r\ntiT                18       2104\r\nipc1               24        512\r\nsys_evt            20       1824\r\nwifi               23       4356\r\nesp_timer          22       3328\r\nipc0               24        520\r\nTmr Svc             1       1616\r\nnucula> \r\nnucula>"}
+{"ts":1789300868,"cycle":21,"kind":"cycle","amount":"1","secs":"1.30"}
+{"ts":1789300875,"cycle":22,"kind":"cycle","amount":"2","secs":"1.75"}
+{"ts":1789300882,"cycle":23,"kind":"cycle","amount":"5","secs":"2.27"}
+{"ts":1789300898,"cycle":24,"kind":"fail","amount":"21","error":"receive did not complete: nucula> "}
+{"ts":1789301108,"cycle":24,"kind":"abort","reason":"console lost after reboot"}

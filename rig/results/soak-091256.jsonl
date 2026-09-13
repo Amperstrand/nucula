@@ -1,0 +1,20 @@
+{"ts":1789290776,"cycle":0,"kind":"start","hours":"1","log":"\"/home/ubuntu/src/nucula/rig/results/soak-091256.jsonl\""}
+{"ts":1789290777,"cycle":0,"kind":"rig","report":"lock: labgrid place + flock\nacr:  up (ACR1252U_V101.0), polling=0x8F None\natom: console up, wifi up None\nmint: 192.168.13.221:3338 reachable"}
+{"ts":1789290779,"cycle":1,"kind":"cycle","amount":"1","secs":"1.54"}
+{"ts":1789290789,"cycle":2,"kind":"cycle","amount":"2","secs":"4.76"}
+{"ts":1789290798,"cycle":3,"kind":"cycle","amount":"5","secs":"4.39"}
+{"ts":1789290809,"cycle":4,"kind":"cycle","amount":"21","secs":"6.04"}
+{"ts":1789290817,"cycle":5,"kind":"cycle","amount":"42","secs":"3.35"}
+{"ts":1789290827,"cycle":6,"kind":"cycle","amount":"1","secs":"5.08"}
+{"ts":1789290836,"cycle":7,"kind":"cycle","amount":"2","secs":"4.03"}
+{"ts":1789290846,"cycle":8,"kind":"cycle","amount":"5","secs":"4.42"}
+{"ts":1789290856,"cycle":9,"kind":"cycle","amount":"21","secs":"5.03"}
+{"ts":1789290864,"cycle":10,"kind":"cycle","amount":"42","secs":"3.37"}
+{"ts":1789290869,"cycle":10,"kind":"snapshot","heap":"> heap\r\nfree:          96592\r\nlargest block: 32768\r\nmin ever free: 16\r\nnucula> \r\nnucula>","tasks":"tasks\r\nname             prio  stack-min\r\nconsole             5       5028\r\nIDLE1               0        948\r\nIDLE0               0        952\r\nwifi_drain          4       6868\r\nwifi_sup            3       3392\r\ntiT                18       1992\r\nTmr Svc             1       1616\r\nipc1               24        512\r\nsys_evt            20       1824\r\nesp_timer          22       3328\r\nwifi               23       4356\r\nipc0               24        520\r\nnucula> \r\nnucula>"}
+{"ts":1789290871,"cycle":11,"kind":"cycle","amount":"1","secs":"1.66"}
+{"ts":1789290878,"cycle":12,"kind":"cycle","amount":"2","secs":"1.57"}
+{"ts":1789290885,"cycle":13,"kind":"cycle","amount":"5","secs":"2.27"}
+{"ts":1789290892,"cycle":14,"kind":"cycle","amount":"21","secs":"2.60"}
+{"ts":1789290901,"cycle":15,"kind":"cycle","amount":"42","secs":"3.18"}
+{"ts":1789290914,"cycle":16,"kind":"fail","amount":"1","error":"receive did not complete: nucula> "}
+{"ts":1789291124,"cycle":16,"kind":"abort","reason":"console lost after reboot"}

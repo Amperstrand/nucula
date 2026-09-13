@@ -10,10 +10,20 @@
 //
 // PN7160-specific pins (IRQ/VEN/DWL) live with the driver in nci.h.
 
+#if CONFIG_NUCULA_BOARD_ATOM
+
+// M5Stack Atom Matrix + MFRC522 over the Grove port (same wiring as the
+// ccid-firmware-rs esp32-ccid board-m5atom rig).
+#define BOARD_I2C_SDA_PIN   GPIO_NUM_26  // Grove SDA
+#define BOARD_I2C_SCL_PIN   GPIO_NUM_32  // Grove SCL
+#define BOARD_MFRC522_ADDR  0x28
+#else
+
 // Shared I2C bus
 #define BOARD_I2C_SDA_PIN   GPIO_NUM_6   // D4
 #define BOARD_I2C_SCL_PIN   GPIO_NUM_7   // D5
 
+#endif
 // SSD1309 OLED (SA0 low = 0x3C, SA0 high = 0x3D)
 #define BOARD_OLED_ADDR     0x3C
 // Optional hardware reset pin (D3). Set to -1 if not wired.
