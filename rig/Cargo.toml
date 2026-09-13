@@ -25,3 +25,7 @@ tokio = { version = "1", optional = true, features = ["rt", "macros", "time"] }
 [[example]]
 name = "console_dump"
 required-features = ["live"]
+
+[[example]]
+name = "soak"
+required-features = ["live", "payer"]

@@ -174,13 +174,29 @@ async fn console_relay_money_loop() {
 async fn relay_acr_emulated() {
     let mint = mint_url();
     let token = nucula_rig::payer::mint_token(&mint, 1).await.expect("mint");
-    let stripped = nucula_rig::strip::strip_dleq(&token).expect("dleq strip");
-    eprintln!(
-        "token: {} chars -> {} after dleq strip",
-        token.len(),
-        stripped.len()
-    );
-    let image = nucula_rig::ndef_t2t::build_ndef_text_image(&stripped, 256).expect("ndef image");
+    // DLEQ stripping is OPT-IN (NUCULA_CE_STRIP_DLEQ=1): it weakens the
+    // token (nucula requires NUT-12) and is only ever useful for
+    // constrained carriers — small physical cards / the CE path.
+    let carrier_token = match std::env::var("NUCULA_CE_STRIP_DLEQ") {
+        Ok(v) if v == "1" => {
+            let stripped = nucula_rig::strip::strip_dleq(&token).expect("dleq strip");
+            eprintln!(
+                "token: {} chars -> {} after opt-in dleq strip",
+                token.len(),
+                stripped.len()
+            );
+            stripped
+        }
+        _ => {
+            eprintln!(
+                "token: {} chars (full, NUT-12 intact — stripping is opt-in)",
+                token.len()
+            );
+            token
+        }
+    };
+    let image =
+        nucula_rig::ndef_t2t::build_ndef_text_image(&carrier_token, 256).expect("ndef image");
     eprintln!("ndef image: {} bytes", image.len());
     // Measured 2026-09-12 (cold reads, fresh activation each time):
     // the ACR1252U's Ultralight CE serves only the original 16-page
