@@ -1,0 +1,2 @@
+source /home/ubuntu/src/nucula/build-m5stick/bootloader/gdbinit/symbols
+source /home/ubuntu/src/nucula/build-m5stick/bootloader/gdbinit/connect

@@ -1,0 +1,15 @@
+{"ts":1789288144,"cycle":0,"kind":"start","hours":"1","log":"\"/home/ubuntu/src/nucula/rig/results/soak-082904.jsonl\""}
+{"ts":1789288145,"cycle":0,"kind":"rig","report":"lock: labgrid place + flock\nacr:  up (ACR1252U_V101.0), polling=0x8F None\natom: console up, wifi up None\nmint: 192.168.13.221:3338 reachable"}
+{"ts":1789288146,"cycle":1,"kind":"cycle","amount":"1","secs":"1.35"}
+{"ts":1789288154,"cycle":2,"kind":"cycle","amount":"2","secs":"2.38"}
+{"ts":1789288161,"cycle":3,"kind":"cycle","amount":"5","secs":"2.58"}
+{"ts":1789288170,"cycle":4,"kind":"cycle","amount":"21","secs":"3.19"}
+{"ts":1789288178,"cycle":5,"kind":"cycle","amount":"42","secs":"3.02"}
+{"ts":1789288184,"cycle":6,"kind":"cycle","amount":"1","secs":"1.75"}
+{"ts":1789288191,"cycle":7,"kind":"cycle","amount":"2","secs":"2.17"}
+{"ts":1789288199,"cycle":8,"kind":"cycle","amount":"5","secs":"2.28"}
+{"ts":1789288206,"cycle":9,"kind":"cycle","amount":"21","secs":"2.49"}
+{"ts":1789288215,"cycle":10,"kind":"cycle","amount":"42","secs":"3.80"}
+{"ts":1789288220,"cycle":10,"kind":"snapshot","heap":"nucula>","tasks":"heap\r\nfree:          103388\r\nlargest block: 34816\r\nmin ever free: 32\r\nnucula> \r\nnucula> tasks\r\nna"}
+{"ts":1789288225,"cycle":11,"kind":"fail","amount":"1","error":"receive did not complete: E (883209) wallet: save_proofs: serialization fa"}
+{"ts":1789288436,"cycle":11,"kind":"abort","reason":"console lost after reboot"}

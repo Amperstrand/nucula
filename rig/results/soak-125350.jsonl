@@ -1,0 +1,11 @@
+{"ts":1789304030,"cycle":0,"kind":"start","hours":"1","log":"\"/home/ubuntu/src/nucula/rig/results/soak-125350.jsonl\""}
+{"ts":1789304031,"cycle":0,"kind":"rig","report":"lock: labgrid place + flock\nacr:  up (ACR1252U_V101.0), polling=0x8F None\natom: console up, wifi up None\nmint: 192.168.13.221:3338 reachable"}
+{"ts":1789304033,"cycle":1,"kind":"cycle","amount":"1","secs":"1.80"}
+{"ts":1789304041,"cycle":2,"kind":"cycle","amount":"2","secs":"2.47"}
+{"ts":1789304052,"cycle":3,"kind":"cycle","amount":"5","secs":"5.88"}
+{"ts":1789304060,"cycle":4,"kind":"cycle","amount":"21","secs":"3.07"}
+{"ts":1789304069,"cycle":5,"kind":"cycle","amount":"42","secs":"4.29"}
+{"ts":1789304078,"cycle":6,"kind":"cycle","amount":"1","secs":"4.10"}
+{"ts":1789304088,"cycle":7,"kind":"cycle","amount":"2","secs":"4.60"}
+{"ts":1789304097,"cycle":8,"kind":"fail","amount":"5","error":"receive did not complete: nucula> receive cashuBo2FteBpodHRwOi8vMTkyLjE2OC4xMy4yMjE6MzMzOGF1Y3NhdGF0gaJhaUgAIuAlhneT0WFwhKRhYQFhc3hAYWJmMmYwYTNmZjlkNGJmMDU5NGZlZjZmOTM0ZTQ4OTQ5NzBhNzVkZjRlN2Y3OGE3NzRmZWU4N2RjNzE1YzE1ZWFjWCEDteD4_PtJoj8oCsrf90Vgh13shvggh_YJueWOCewhXWRhZKNhZVgg851h9scGDrIp8K_KjRZPsEEKtyjZ2VSDgpF-2C6EVMZhc1ggd9hdVXYDE5UzqiVBk12MJQXExV3zIGXagy-J5aRlJ1thclggQ3kJEkUVitA8nBTlrya-KPE4z2CHrlLNu24EAeSqFi6kYWEBYXN4QDA4ZDMyMGFiMTc4NTkxNzhlMDFlYzY3ZTkyZmJkYWJjM2UzZjExMWI0MjFmMmEzMDFlZGY1NWQ1N2ZjOGMwZTJhY1ghA99eQn0Bxy4BZsyh8NnGrI"}
+{"ts":1789304307,"cycle":8,"kind":"abort","reason":"console lost after reboot"}

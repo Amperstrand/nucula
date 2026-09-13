@@ -1,5 +1,13 @@
 #pragma once
 
+#if CONFIG_NUCULA_BOARD_ATOM
+
+// M5Stack Atom Matrix + MFRC522 over the Grove port (same wiring as the
+// ccid-firmware-rs esp32-ccid board-m5atom rig).
+#define BOARD_I2C_SDA_PIN   GPIO_NUM_26  // Grove SDA
+#define BOARD_I2C_SCL_PIN   GPIO_NUM_32  // Grove SCL
+#define BOARD_MFRC522_ADDR  0x28
+
 #include "driver/gpio.h"
 
 // Board definition: Seeed XIAO ESP32-C3

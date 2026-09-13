@@ -1,0 +1,18 @@
+{"ts":1789298818,"cycle":0,"kind":"start","hours":"1","log":"\"/home/ubuntu/src/nucula/rig/results/soak-112658.jsonl\""}
+{"ts":1789298819,"cycle":0,"kind":"rig","report":"lock: labgrid place + flock\nacr:  up (ACR1252U_V101.0), polling=0x8F None\natom: console up, wifi up None\nmint: 192.168.13.221:3338 reachable"}
+{"ts":1789298821,"cycle":1,"kind":"cycle","amount":"1","secs":"1.95"}
+{"ts":1789298828,"cycle":2,"kind":"cycle","amount":"2","secs":"1.97"}
+{"ts":1789298838,"cycle":3,"kind":"cycle","amount":"5","secs":"5.11"}
+{"ts":1789298848,"cycle":4,"kind":"cycle","amount":"21","secs":"5.04"}
+{"ts":1789298859,"cycle":5,"kind":"cycle","amount":"42","secs":"5.66"}
+{"ts":1789298868,"cycle":6,"kind":"cycle","amount":"1","secs":"3.65"}
+{"ts":1789298877,"cycle":7,"kind":"cycle","amount":"2","secs":"3.79"}
+{"ts":1789298887,"cycle":8,"kind":"cycle","amount":"5","secs":"5.77"}
+{"ts":1789298895,"cycle":9,"kind":"cycle","amount":"21","secs":"2.58"}
+{"ts":1789298903,"cycle":10,"kind":"cycle","amount":"42","secs":"3.42"}
+{"ts":1789298908,"cycle":10,"kind":"snapshot","heap":"heap\r\nfree:          96128\r\nlargest block: 34816\r\nmin ever free: 16\r\nnucula> \r\nnucula>","tasks":"tasks\r\nname             prio  stack-min\r\nconsole             5       5036\r\nIDLE1               0        948\r\nIDLE0               0        952\r\nwifi_drain          4       6732\r\nwifi_sup            3       3404\r\ntiT                18       1988\r\nTmr Svc             1       1616\r\nipc1               24        512\r\nsys_evt            20       1836\r\nesp_timer          22       3296\r\nwifi               23       4352\r\nipc0               24        520\r\nnucula> \r\nnucula>"}
+{"ts":1789298910,"cycle":11,"kind":"cycle","amount":"1","secs":"1.30"}
+{"ts":1789298916,"cycle":12,"kind":"cycle","amount":"2","secs":"1.50"}
+{"ts":1789298924,"cycle":13,"kind":"cycle","amount":"5","secs":"2.26"}
+{"ts":1789298939,"cycle":14,"kind":"fail","amount":"21","error":"receive did not complete: nucula>"}
+{"ts":1789299149,"cycle":14,"kind":"abort","reason":"console lost after reboot"}
