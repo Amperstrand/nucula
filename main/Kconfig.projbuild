@@ -1,13 +1,19 @@
 menu "Nucula"
 
-    config NUCULA_SELFTEST_ON_BOOT
-        bool "Run crypto/keyset self-tests at every boot"
-        default n
+    choice NUCULA_BOARD
+        prompt "Target board"
+        default NUCULA_BOARD_XIAO
         help
-            Runs the BDHKE/DLEQ/NUT-13 crypto vectors and the keyset-id
-            derivation self-tests during app_main. Costs roughly a second
-            of boot time; the same tests are always available at runtime
-            via the 'selftest' console command.
+            Selects the peripheral set and the NFC role. Most boards share
+            one I2C bus for all peripherals; every driver probes for its
+            device and disables itself when absent.
+
+        config NUCULA_BOARD_XIAO
+            bool "Seeed XIAO ESP32-C3 (PN7160 NFC card emulation)"
+            help
+                Reference hardware: PN7160 card emulation, SSD1309 OLED,
+                PCF8574 keypad. NFC role: the wallet emulates a Type 4
+                NDEF tag and the payer reads/writes it.
 
         config NUCULA_BOARD_ATOM
             bool "M5Stack Atom Matrix + MFRC522 (NFC reader mode)"
@@ -16,5 +22,21 @@ menu "Nucula"
                 NFC role: the wallet is the READER and receives cashu
                 tokens from a Type 2 NDEF tag (e.g. an ACR1252 in
                 MIFARE Ultralight card-emulation mode, or a real NTAG).
+
+        config NUCULA_BOARD_M5STICK
+            bool "M5StickC Plus + MFRC522 (I2C + ST7789 display)"
+            help
+                M5StickC Plus with an MFRC522 on the Grove I2C port.
+                Adds ST7789 display (135x240) and two buttons (G37/G39).
+    endchoice
+
+    config NUCULA_SELFTEST_ON_BOOT
+        bool "Run crypto/keyset self-tests at every boot"
+        default n
+        help
+            Runs the BDHKE/DLEQ/NUT-13 crypto vectors and the keyset-id
+            derivation self-tests during app_main. Costs roughly a second
+            of boot time; the same tests are always available at runtime
+            via the 'selftest' console command.
 
 endmenu
