@@ -29,3 +29,7 @@ required-features = ["live"]
 [[example]]
 name = "soak"
 required-features = ["live", "payer"]
+
+[[example]]
+name = "boundary_probe"
+required-features = ["live", "payer"]

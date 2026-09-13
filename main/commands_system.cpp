@@ -28,6 +28,8 @@
 #include <freertos/task.h>
 #include "driver/i2c_master.h"
 #include "i2c_bus.h"
+#include "wallet_wstat.h"
+#include <nvs.h>
 
 #define TAG "nucula"
 
@@ -425,6 +427,21 @@ static void cmd_nfcdump(const char *arg)
 }
 #endif
 
+static void cmd_wstat(const char *)
+{
+    const wallet_nvs_stat_t *s = &g_wallet_nvs_stat;
+    console_printf("saves=%lu fails=%lu last=%s err=0x%x blob=%u proofs_loaded=%d load_fails=%lu\r\n",
+                   (unsigned long)s->saves, (unsigned long)s->save_fails,
+                   s->last_save_ok ? "ok" : "FAIL",
+                   s->last_err, (unsigned)s->last_blob,
+                   s->loaded_proofs, (unsigned long)s->load_fails);
+    nvs_stats_t st = {};
+    if (nvs_get_stats("nvs", &st) == ESP_OK) {
+        console_printf("nvs entries: used=%d free=%d total=%d\r\n",
+                       st.used_entries, st.free_entries, st.total_entries);
+    }
+}
+
 static void cmd_i2crecover(const char *arg)
 {
     int clocks = arg && strlen(arg) > 0 ? atoi(arg) : 32;
@@ -502,6 +519,7 @@ void commands_system_register(void)
     console_register_cmd("display", cmd_display, "display <on|off|fill [rgb565]>");
     console_register_cmd("button",  cmd_button,  "button — report a press within 5s");
 #endif
+    console_register_cmd("wstat",   cmd_wstat,   "wstat — wallet persistence diagnostics");
     console_register_cmd("reboot",  cmd_reboot,   "restart the device");
     console_register_cmd("heap",    cmd_heap,     "show heap usage");
     console_register_cmd("tasks",   cmd_tasks,    "show task stack high-water marks");

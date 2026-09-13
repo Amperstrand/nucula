@@ -1,5 +1,6 @@
 #include "wallet.hpp"
 #include "wallet_internal.hpp"
+#include "wallet_wstat.h"
 #include "cashu_json.hpp"
 
 #include <algorithm>
@@ -78,6 +79,8 @@ bool Wallet::erase_nvs()
     return true;
 }
 
+extern "C" wallet_nvs_stat_t g_wallet_nvs_stat = {};
+
 bool Wallet::save_proofs()
 {
     std::string blob = proofs_to_json(proofs_);
@@ -86,8 +89,13 @@ bool Wallet::save_proofs()
     // they are bearer money.
     if (blob.empty() && !proofs_.empty()) {
         ESP_LOGE(TAG, "save_proofs: serialization failed, keeping stored proofs");
+        g_wallet_nvs_stat.save_fails++;
+        g_wallet_nvs_stat.last_save_ok = false;
+        g_wallet_nvs_stat.last_err = -1;
+        g_wallet_nvs_stat.last_blob = 0;
         return false;
     }
+    g_wallet_nvs_stat.last_blob = blob.size();
 
     Nvs nvs(NVS_READWRITE);
     if (!nvs.ok()) {
@@ -103,8 +111,14 @@ bool Wallet::save_proofs()
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "save_proofs failed: %s", esp_err_to_name(err));
+        g_wallet_nvs_stat.save_fails++;
+        g_wallet_nvs_stat.last_save_ok = false;
+        g_wallet_nvs_stat.last_err = err;
         return false;
     }
+    g_wallet_nvs_stat.saves++;
+    g_wallet_nvs_stat.last_save_ok = true;
+    g_wallet_nvs_stat.last_err = 0;
     ESP_LOGW(TAG, "[%d] saved %d proofs (%d bytes)",
              nvs_slot_, (int)proofs_.size(), (int)blob.size());
     return true;
@@ -116,13 +130,18 @@ bool Wallet::load_proofs()
     char key[16];
     slot_key(key, sizeof(key), "proofs", nvs_slot_);
     std::string blob;
-    if (!nvs.get_blob(key, blob))
+    if (!nvs.get_blob(key, blob)) {
+        g_wallet_nvs_stat.load_fails++;
         return false;
+    }
 
     std::vector<Proof> loaded;
-    if (!proofs_from_json(blob.c_str(), loaded))
+    if (!proofs_from_json(blob.c_str(), loaded)) {
+        g_wallet_nvs_stat.load_fails++;
         return false;
+    }
 
+    g_wallet_nvs_stat.loaded_proofs = (int)loaded.size();
     proofs_ = std::move(loaded);
     ESP_LOGW(TAG, "[%d] loaded %d proofs from NVS", nvs_slot_, (int)proofs_.size());
     return true;
