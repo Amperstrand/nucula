@@ -105,7 +105,7 @@ bool Wallet::save_proofs()
         ESP_LOGE(TAG, "save_proofs failed: %s", esp_err_to_name(err));
         return false;
     }
-    ESP_LOGI(TAG, "[%d] saved %d proofs (%d bytes)",
+    ESP_LOGW(TAG, "[%d] saved %d proofs (%d bytes)",
              nvs_slot_, (int)proofs_.size(), (int)blob.size());
     return true;
 }
@@ -124,7 +124,7 @@ bool Wallet::load_proofs()
         return false;
 
     proofs_ = std::move(loaded);
-    ESP_LOGI(TAG, "[%d] loaded %d proofs from NVS", nvs_slot_, (int)proofs_.size());
+    ESP_LOGW(TAG, "[%d] loaded %d proofs from NVS", nvs_slot_, (int)proofs_.size());
     return true;
 }
 
