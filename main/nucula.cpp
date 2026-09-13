@@ -16,6 +16,8 @@
 #include "console.h"
 #include "selftest.hpp"
 #include "display.h"
+#include "display_st7789.h"
+#include "button.h"
 #include "i2c_bus.h"
 #include "nfc.hpp"
 #include "keypad.h"
@@ -192,6 +194,19 @@ extern "C" void app_main(void)
     if (!nfc_init(i2c_bus_get()))
         ESP_LOGW(TAG, "NFC frontend init failed, NFC disabled");
 
+#if CONFIG_NUCULA_BOARD_M5STICK
+    // Panel output DISABLED pending a dedicated session: pressing a
+    // button blanks the glass (pin map verified, button driver is
+    // passive-poll — suspect mechanical/PMU; see GitHub issue #1,
+    // Session 3). Init still runs because it sequences the AXP192
+    // rails the Grove port (MFRC522) depends on; backlight stays off.
+    if (display_st7789_init() == ESP_OK) {
+        display_st7789_backlight(false);
+    } else {
+        ESP_LOGW(TAG, "ST7789 init failed, display disabled");
+    }
+    button_init();
+#endif
 
     ui_refresh();
 }
