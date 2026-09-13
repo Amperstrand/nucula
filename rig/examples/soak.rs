@@ -194,6 +194,9 @@ async fn main() {
     let deadline = Instant::now() + Duration::from_secs(hours * 3600);
     let mut console = wait_console(Duration::from_secs(60)).expect("console at soak start");
     let _ = console.mint_add(&mint);
+    // Crash-consistency forensics: capture save_proofs success/failure
+    // lines (INFO/ERROR on wallet_nvs) that the WARN default hides.
+    let _ = console.cmd("log i wallet_nvs");
 
     while Instant::now() < deadline {
         soak.cycles += 1;
