@@ -95,6 +95,7 @@ static std::string derive_keyset_id_v1(const Keyset &ks)
 //   "<amt>:<pk_hex>,<amt>:<pk_hex>,...|unit:<unit>[|input_fee_ppk:<f>][|final_expiry:<e>]"
 // pubkeys lowercased; input_fee_ppk appended iff > 0; final_expiry appended iff
 // present (matching nutshell derive_keyset_id_v2 — `if final_expiry is not None`).
+// NUT #02: Keyset IDs are derived from public data. To derive the keyset ID of a keyset, execute the following steps:
 static std::string derive_keyset_id_v2(const Keyset &ks)
 {
     if (ks.keys.empty())

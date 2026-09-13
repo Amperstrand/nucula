@@ -48,6 +48,7 @@ fail:
     return 0;
 }
 
+// NUT #00: `Y = PublicKey('02' || SHA256(msg_hash || counter))` where `msg_hash` is `SHA256(DOMAIN_SEPARATOR || x)`
 int cashu_hash_to_curve(const secp256k1_context *ctx,
                         secp256k1_pubkey *out,
                         const unsigned char *msg,
@@ -135,6 +136,7 @@ int cashu_unblind(const secp256k1_context *ctx,
     return 1;
 }
 
+// NUT #12: The purpose of this DLEQ is to prove that the mint has used the same private key `a` for creating its public key `A` ([NUT-01][01]) and for signing the BlindedMessage `B'`. `Bob` returns the DLEQ proof additional to the blind signature `C'` for a mint or swap operation.
 int cashu_verify_dleq(const secp256k1_context *ctx,
                       const secp256k1_pubkey *A,
                       const secp256k1_pubkey *B_,
@@ -309,6 +311,7 @@ static int nut13_hmac(const unsigned char *seed, size_t seed_len,
     return mbedtls_md_hmac(md_info, seed, seed_len, msg, pos, digest) == 0 ? 1 : 0;
 }
 
+// NUT #13: For keysets with version byte `01`, the wallet uses `counter_k`, `seed` and `keyset_id` as inputs to a Key Derivation Function (KDF) which output is used to derive `secret` and `r`.
 int cashu_derive_secret(const unsigned char *seed, size_t seed_len,
                         const char *keyset_id, uint32_t counter,
                         unsigned char secret_out[32])
