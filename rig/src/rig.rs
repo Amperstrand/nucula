@@ -3,10 +3,10 @@
 //! returns shared hardware to normal.
 //!
 //! Locking is two-layered: the PRIMARY is the shared labgrid
-//! coordinator (place `nucula-rig` matching the atom token exported by
-//! the microfips bench and the ACR1252 token exported by the bolty rig
-//! — acquiring excludes both projects). The FALLBACK is the
-//! machine-wide flock convention (see [`crate::locks`]) when the
+//! coordinator (place `nucula-rig` matching the m5stick serial and the
+//! reference ACR1252 tokens exported by the ai-legion-nfc bench
+//! exporter — acquiring excludes the other bench users). The FALLBACK
+//! is the machine-wide flock convention (see [`crate::locks`]) when the
 //! coordinator is unreachable. Both are held when labgrid works:
 //! a coordinator crash mid-run must not silently drop exclusivity.
 
@@ -19,12 +19,18 @@ use crate::acr::Acr1252;
 use crate::atom_console::AtomConsole;
 use crate::locks::DeviceLock;
 
-pub const LABGRID_COORDINATOR: &str = "192.168.13.221:20408";
+pub const LABGRID_COORDINATOR: &str = "192.168.13.208:20408";
 pub const LABGRID_PLACE: &str = "nucula-rig";
-pub const LABGRID_CLIENT: &str = "/home/ubuntu/.local/bin/labgrid-client";
+pub const LABGRID_CLIENT: &str = "/usr/local/bin/labgrid-client";
 /// The mint's LAN bind — the atom must reach the URL embedded in its
 /// tokens; preflight checks reachability.
-pub const DEFAULT_RELAY_MINT: &str = "http://192.168.13.221:3338";
+pub const DEFAULT_RELAY_MINT: &str = "http://192.168.13.208:3338";
+
+/// The relay mint URL: `MINT_URL` overrides the bench default (same
+/// convention as the payer tests — see payer.rs `mint_base`).
+pub fn relay_mint() -> String {
+    std::env::var("MINT_URL").unwrap_or_else(|_| DEFAULT_RELAY_MINT.into())
+}
 
 #[derive(Default)]
 pub struct PreflightReport {
@@ -53,11 +59,12 @@ fn labgrid(action: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn mint_host_port() -> (&'static str, u16) {
-    // DEFAULT_RELAY_MINT is "http://IP:PORT"; parse without an HTTP dep.
-    let rest = DEFAULT_RELAY_MINT.trim_start_matches("http://");
+fn mint_host_port() -> (String, u16) {
+    // relay_mint() is "http://IP:PORT"; parse without an HTTP dep.
+    let mint = relay_mint();
+    let rest = mint.trim_start_matches("http://");
     let mut it = rest.split(':');
-    let host = it.next().unwrap_or("192.168.13.221");
+    let host = it.next().unwrap_or("192.168.13.208").to_owned();
     let port = it.next().and_then(|p| p.parse().ok()).unwrap_or(3338);
     (host, port)
 }

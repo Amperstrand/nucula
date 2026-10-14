@@ -28,7 +28,7 @@ fn atom_port() -> String {
 }
 
 fn mint_url() -> String {
-    std::env::var("MINT_URL").unwrap_or_else(|_| nucula_rig::rig::DEFAULT_RELAY_MINT.into())
+    nucula_rig::rig::relay_mint()
 }
 
 /// Rust serial-driver smoke: open the atom console and round-trip a

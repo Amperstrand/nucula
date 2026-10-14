@@ -166,8 +166,7 @@ async fn main() {
         .or_else(|| std::env::var("NUCULA_SOAK_HOURS").ok())
         .and_then(|s| s.trim_start_matches("--hours ").parse().ok())
         .unwrap_or(8);
-    let mint =
-        std::env::var("MINT_URL").unwrap_or_else(|_| nucula_rig::rig::DEFAULT_RELAY_MINT.into());
+    let mint = nucula_rig::rig::relay_mint();
 
     let results = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("results");
     std::fs::create_dir_all(&results).expect("results dir");
