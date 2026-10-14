@@ -141,6 +141,15 @@ pub struct RigGuard {
     pub report: PreflightReport,
 }
 
+/// Per-board flock name (e.g. `atom-9d529068b4`, `m5stick-49d6163ebe`):
+/// the machine-wide lock convention is keyed by the board's serial
+/// identity, so the two boards lock independently and a conflict report
+/// names the board it belongs to.
+fn board_flock_name() -> String {
+    let board = super::detect_board();
+    format!("{}-{}", board.name(), board.lock_id())
+}
+
 impl RigGuard {
     pub fn acquire() -> Result<Self, String> {
         let labgrid_held = labgrid("acquire");
@@ -148,7 +157,7 @@ impl RigGuard {
         // users; labgrid covers cross-host users of the coordinator.
         let acr_lock = DeviceLock::acquire("acr1252").map_err(|e| format!("preflight: {e}"))?;
         let atom_lock =
-            DeviceLock::acquire("atom-9d529068b4").map_err(|e| format!("preflight: {e}"))?;
+            DeviceLock::acquire(&board_flock_name()).map_err(|e| format!("preflight: {e}"))?;
         let mut report = preflight(true);
         report.lock_mode = if labgrid_held {
             "labgrid place + flock"

@@ -46,6 +46,15 @@ impl Board {
             Board::M5Stick => "m5stick",
         }
     }
+
+    /// Serial fragment of the default port — the per-device key for the
+    /// machine-wide flock convention (see [`crate::locks`]).
+    pub fn lock_id(&self) -> &'static str {
+        match self {
+            Board::Atom => "9d529068b4",
+            Board::M5Stick => "49d6163ebe",
+        }
+    }
 }
 
 /// Detect the board from NUCULA_BOARD env var, or by probing which
@@ -79,3 +88,23 @@ pub mod payer;
 
 #[cfg(feature = "payer")]
 pub mod strip;
+
+#[cfg(test)]
+mod tests {
+    use super::Board;
+
+    /// The atom name must stay byte-identical to the pre-board-split
+    /// hardcoded lock (`atom-9d529068b4`) so an in-flight atom run
+    /// keeps mutual exclusivity against upgraded code.
+    #[test]
+    fn flock_names_are_per_board_and_stable() {
+        assert_eq!(
+            format!("{}-{}", Board::Atom.name(), Board::Atom.lock_id()),
+            "atom-9d529068b4"
+        );
+        assert_eq!(
+            format!("{}-{}", Board::M5Stick.name(), Board::M5Stick.lock_id()),
+            "m5stick-49d6163ebe"
+        );
+    }
+}
