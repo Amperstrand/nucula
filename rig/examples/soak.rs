@@ -256,12 +256,17 @@ async fn main() {
         std::thread::sleep(Duration::from_secs(5));
 
         if soak.cycles % SNAPSHOT_EVERY == 0 {
-            if let (Ok(heap), Ok(tasks)) = (console.cmd("heap"), console.cmd("tasks")) {
+            if let (Ok(heap), Ok(tasks), Ok(wstat)) =
+                (console.cmd("heap"), console.cmd("tasks"), console.cmd("wstat"))
+            {
                 soak.event(
                     "snapshot",
                     &[
                         ("heap", heap.trim().to_string()),
                         ("tasks", tasks.trim().to_string()),
+                        // wstat: wallet-persistence witness (firmware
+                        // commands_system.cpp) — the NVS-decay signal, gap iv.
+                        ("wstat", wstat.trim().to_string()),
                     ],
                 );
             }
