@@ -33,6 +33,39 @@
 #define BOARD_MFRC522_ADDR  0x28
 #define BOARD_OLED_RST_PIN  ((gpio_num_t)-1)  // no OLED on this target
 
+#elif CONFIG_NUCULA_BOARD_M5STICK
+
+// M5StickC Plus + MFRC522 on the Grove I2C port. The ST7789 panel rides
+// SPI2; its power rails come from the AXP192 PMU on a separate I2C1 bus.
+// Plus2 variant (no PMU): DC moves to G14, RST to G12, backlight to G27,
+// and GPIO4 must be held high to keep the regulator on — resolved at
+// runtime by probing for the PMU; see display_st7789.c.
+#define BOARD_I2C_SDA_PIN   GPIO_NUM_32  // Grove SDA
+#define BOARD_I2C_SCL_PIN   GPIO_NUM_33  // Grove SCL
+#define BOARD_I2C_INTERNAL_PULLUP 1
+#define BOARD_MFRC522_ADDR  0x28
+#define BOARD_OLED_RST_PIN  ((gpio_num_t)-1)  // no OLED on this target
+
+#define BOARD_PMU_SDA_PIN   GPIO_NUM_21  // I2C1, AXP192 on the Plus
+#define BOARD_PMU_SCL_PIN   GPIO_NUM_22
+#define BOARD_PMU_ADDR      0x34
+
+// ST7789 display (SPI2), M5StickC Plus pinout
+#define BOARD_LCD_SCLK_PIN  GPIO_NUM_13
+#define BOARD_LCD_MOSI_PIN  GPIO_NUM_15
+#define BOARD_LCD_CS_PIN    GPIO_NUM_5
+#define BOARD_LCD_DC_PIN    GPIO_NUM_23
+#define BOARD_LCD_RST_PIN   GPIO_NUM_18
+#define BOARD_LCD_BL_PIN    GPIO_NUM_27  // Plus2 only; Plus uses AXP192 LDO2
+#define BOARD_LCD_WIDTH     135
+#define BOARD_LCD_HEIGHT    240
+#define BOARD_LCD_OFFSET_X  52
+#define BOARD_LCD_OFFSET_Y  40
+
+// Buttons (input-only GPIOs; the board carries external pull-ups)
+#define BOARD_BTN_A_PIN     GPIO_NUM_37  // front
+#define BOARD_BTN_B_PIN     GPIO_NUM_39  // side
+
 #else // XIAO ESP32-C3
 
 #define BOARD_I2C_SDA_PIN   GPIO_NUM_6   // D4

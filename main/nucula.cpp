@@ -17,6 +17,7 @@
 #include "selftest.hpp"
 #include "display.h"
 #include "i2c_bus.h"
+#include "axp192.h"
 #include "nfc.hpp"
 #include "keypad.h"
 #include "wallet_store.hpp"
@@ -178,6 +179,12 @@ extern "C" void app_main(void)
     // Shared I2C bus for display, keypad, and NFC. Each driver probes for
     // its device and disables itself when absent, so a bare module still
     // boots into a fully working console + wallet.
+#if CONFIG_NUCULA_BOARD_M5STICK
+    // Bring up the PMU first: it powers the Grove rail the MFRC522
+    // (and on the Plus, the display rails) depends on.
+    if (axp192_init() != ESP_OK)
+        ESP_LOGW(TAG, "no AXP192 found — Plus2 variant, GPIO-powered rails");
+#endif
     if (i2c_bus_init() != ESP_OK)
         ESP_LOGW(TAG, "I2C bus init failed; display/keypad/NFC disabled");
 

@@ -29,6 +29,16 @@ menu "Nucula"
                 tokens from a Type 2 NDEF tag (e.g. an ACR1252 in
                 MIFARE Ultralight card-emulation mode, or a real NTAG).
 
+        config NUCULA_BOARD_M5STICK
+            bool "M5StickC Plus + MFRC522 (I2C + ST7789 display)"
+            help
+                M5StickC Plus with an MFRC522 on the Grove I2C port and
+                the on-board 135x240 ST7789 panel. NFC role: reader,
+                same as the Atom. Runs keypad-less: the USB console REPL
+                covers seed entry and every wallet op, the two buttons
+                cover refresh and the backlight. The Plus2 variant (no
+                AXP192) is detected at runtime.
+
     endchoice
 
     config NUCULA_SELFTEST_ON_BOOT
