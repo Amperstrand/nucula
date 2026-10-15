@@ -156,8 +156,20 @@ async fn console_relay_money_loop() {
         }
         None
     }
-    let before = sat_total(&atom.cmd("balance").expect("balance before"))
-        .expect("balance before: neither a total nor 'no proofs' — console unreadable");
+    let before = {
+        // The first read after a fresh boot can be eaten by boot noise —
+        // retry, then fail loudly (an unknown starting balance would
+        // make every later comparison meaningless).
+        let mut parsed = None;
+        for _ in 0..4 {
+            if let Some(t) = sat_total(&atom.cmd("balance").expect("balance before")) {
+                parsed = Some(t);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(750));
+        }
+        parsed.expect("balance before: neither a total nor 'no proofs' after retries")
+    };
 
     // The Hades2001 bridge drops chunks under dense lines (rig README);
     // the device can complete a receive whose confirmation never crosses
