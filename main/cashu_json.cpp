@@ -481,6 +481,8 @@ struct JsonBuf {
 };
 } // namespace
 
+namespace cashu {
+
 void set_persistence_buffer(char* buf, size_t cap)
 {
     g_persist_buf = buf;
@@ -500,6 +502,9 @@ void proofs_buf_free(char* p)
         free(p);
 }
 
+} // namespace cashu
+
+namespace cashu {
 char* proofs_to_json_buf(const std::vector<Proof>& proofs, size_t* len) {
     // Reserved-buffer mode when the boot reserve succeeded; otherwise the
     // tight-growth heap path (degraded but functional for small wallets).
@@ -548,6 +553,8 @@ char* proofs_to_json_buf(const std::vector<Proof>& proofs, size_t* len) {
     if (len) *len = b.n;
     return b.p;  // borrowed when in reserved-buffer mode; owned heap otherwise
 }
+
+} // namespace cashu
 
 bool proofs_from_json(const char* json_str, std::vector<Proof>& out) {
     cJSON* arr = cJSON_Parse(json_str);
