@@ -123,14 +123,22 @@ static esp_http_client_handle_t slot_client_for(const char *url)
         victim->client = NULL;
     }
 
+    // esp-idf quirk (bench-proven 2026-10-15): an unconditional
+    // crt_bundle_attach drags plain http:// origins onto the TLS
+    // transport ("esp_tls session context cannot be NULL"). Select the
+    // transport by scheme and attach the bundle for https only.
+    bool is_https = (strncmp(url, "https://", 8) == 0);
     esp_http_client_config_t cfg = {
         .url = url,
         .event_handler = on_event,
         .timeout_ms = 10000,
-        .crt_bundle_attach = esp_crt_bundle_attach,
+        .transport_type = is_https ? HTTP_TRANSPORT_OVER_SSL
+                                   : HTTP_TRANSPORT_OVER_TCP,
         .keep_alive_enable = true,
         .save_client_session = true,   // TLS session ticket -> fast reconnect
     };
+    if (is_https)
+        cfg.crt_bundle_attach = esp_crt_bundle_attach;
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (!client) {
         ESP_LOGE(TAG, "client init failed");
