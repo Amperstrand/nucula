@@ -333,6 +333,18 @@ async fn run_cycle(c: &mut AtomConsole, mint: &str, amount: u64) -> Result<(), S
         std::thread::sleep(Duration::from_millis(2000));
     }
     if !recv.contains("received") {
+        // Invisible success: the bridge can swallow the confirmation line
+        // while the device credits the token (the same class the money-loop
+        // e2e now guards against — bench-proven 2026-10-15, 74 sat on the
+        // wallet after a soak abort). The balance delta is authoritative;
+        // only a missing +amount is a real failure, and avoiding the
+        // needless recovery reboot also avoids the reboot console-loss
+        // abort path.
+        if let Ok(after) = read_balance(c) {
+            if after == before + amount {
+                return Ok(());
+            }
+        }
         return Err(format!("receive did not complete: {recv_err}"));
     }
 
