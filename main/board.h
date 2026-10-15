@@ -56,7 +56,7 @@
 // No SSD1309 on this board — and GPIO5 is SCL here: driving an OLED
 // reset on it would rip SCL out of I2C mode before nfc_init() probes
 // the PN7160 (the "silent PN7160" bench incident, fork issue #12).
-#define BOARD_OLED_RST_PIN (-1)
+#define BOARD_OLED_RST_PIN ((gpio_num_t)-1)
 
 #else // XIAO ESP32-C3
 
