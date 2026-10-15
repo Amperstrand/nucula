@@ -13,6 +13,7 @@
 #include "nfc.hpp"
 #include "keypad.h"
 #include "display.h"
+#include "display_st7789.h"
 #include "ui.h"
 
 #include <cstdio>
@@ -437,6 +438,40 @@ static void cmd_i2crecover(const char *arg)
 }
 
 // -------------------------------------------------------------------------
+// M5Stick display diagnostics
+// -------------------------------------------------------------------------
+
+#if CONFIG_NUCULA_BOARD_M5STICK
+static void cmd_display(const char *arg)
+{
+    if (arg && strcmp(arg, "variant") == 0) {
+        console_printf("variant: %s\r\n",
+                       display_st7789_variant() == ST7789_VARIANT_PLUS
+                           ? "Plus (AXP192)" : "Plus2 (GPIO rails)");
+        return;
+    }
+    if (arg && strcmp(arg, "on") == 0) {
+        display_st7789_backlight(true);
+        console_print("backlight on\r\n");
+    } else if (arg && strcmp(arg, "off") == 0) {
+        display_st7789_backlight(false);
+        console_print("backlight off\r\n");
+    } else if (arg && strncmp(arg, "fill", 4) == 0) {
+        const char *c = arg + 4;
+        while (*c == ' ') c++;
+        unsigned long color = 0xFFFF; // white
+        if (*c == '\0' ||
+            (sscanf(c, "%lx", &color) == 1 && color <= 0xFFFF)) {
+            display_st7789_fill((uint16_t)color);
+            console_printf("filled 0x%04lX\r\n", color);
+        } else {
+            console_print("usage: display <on|off|fill [rgb565-hex]|variant>\r\n");
+        }
+    } else {
+        console_print("usage: display <on|off|fill [rgb565-hex]|variant>\r\n");
+    }
+}
+#endif
 
 void commands_system_register(void)
 {
@@ -449,6 +484,9 @@ void commands_system_register(void)
     console_register_cmd("nfcdump", cmd_nfcdump, "nfcdump [pages] [start] — dump tag pages");
 #endif
 #if CONFIG_NUCULA_BOARD_M5STICK
+#endif
+#if CONFIG_NUCULA_BOARD_M5STICK
+    console_register_cmd("display", cmd_display, "display <on|off|fill [rgb565]|variant>");
 #endif
     console_register_cmd("reboot",  cmd_reboot,   "restart the device");
     console_register_cmd("heap",    cmd_heap,     "show heap usage");

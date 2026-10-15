@@ -16,6 +16,7 @@
 #include "console.h"
 #include "selftest.hpp"
 #include "display.h"
+#include "display_st7789.h"
 #include "i2c_bus.h"
 #include "axp192.h"
 #include "nfc.hpp"
@@ -189,6 +190,14 @@ extern "C" void app_main(void)
         ESP_LOGW(TAG, "I2C bus init failed; display/keypad/NFC disabled");
 
     display_init(i2c_bus_get());
+
+#if CONFIG_NUCULA_BOARD_M5STICK
+    if (display_st7789_init() == ESP_OK) {
+        display_st7789_backlight(true);
+    } else {
+        ESP_LOGW(TAG, "ST7789 init failed, display disabled");
+    }
+#endif
 
     if (keypad_init(i2c_bus_get()) == ESP_OK) {
         keypad_start_task();
