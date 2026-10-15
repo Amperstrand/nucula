@@ -89,12 +89,16 @@ bool from_json_mint_info(const cJSON* j, MintInfo& out);
 // PR#382 accounting responses, melt without fee_reserve).
 bool cashu_json_run_tests();
 
-// Blob serialization for NVS persistence
-// Streaming NVS-blob serializer: returns a malloc'd buffer (caller
-// frees) and its length, or nullptr on allocation failure. The cJSON
-// tree+print+copy path needed three full transients and failed above
-// ~60 proofs on the ESP32 heap (nucula#1). Hex-only fields are written
-// raw; `witness` is the only escaped string.
+// Persistence serialization (streaming serializer — the old cJSON
+// tree+print+copy path failed above ~60 proofs on the ESP32 heap,
+// nucula#1). Ownership of the returned pointer depends on
+// mode: with the boot-time reserve active (set_persistence_buffer), the
+// pointer is BORROWED into the reserved buffer — valid until the next
+// call, never freed directly. Without the reserve, it is a heap pointer
+// the caller frees via proofs_buf_free (which handles both modes).
+void set_persistence_buffer(char* buf, size_t cap);
+bool persistence_buffer_active();
+void proofs_buf_free(char* p);
 char* proofs_to_json_buf(const std::vector<Proof>& proofs, size_t* len);
 
 bool proofs_from_json(const char* json_str, std::vector<Proof>& out);

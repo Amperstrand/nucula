@@ -424,11 +424,24 @@ bool from_json_mint_info(const cJSON* j, MintInfo& out) {
 // ---------------------------------------------------------------------------
 
 namespace {
+
+// Persistence serialization buffer, reserved once at early boot (pristine
+// heap) and reused for every save: allocation-free at save time, immune to
+// heap fragmentation. See set_persistence_buffer() and the RAM-ONLY
+// incident in the fork issue tracker for why this exists.
+char* g_persist_buf = nullptr;
+size_t g_persist_buf_cap = 0;
+
 struct JsonBuf {
     char* p = nullptr;
     size_t n = 0, cap = 0;
     bool oom = false;
+    bool owned = true;
+    JsonBuf() = default;
+    JsonBuf(char* ext, size_t extcap) : p(ext), cap(extcap), owned(false) {}
     void need(size_t extra) {
+        if (oom || n + extra <= cap) return;
+        if (!owned) { oom = true; return; }
         if (oom || n + extra <= cap) return;
         // Tight growth (payload + 12.5% + 256 B, single realloc): the old
         // power-of-two ladder demanded 64 KiB contiguous for a ~31 KiB
@@ -468,9 +481,38 @@ struct JsonBuf {
 };
 } // namespace
 
+namespace cashu {
+
+void set_persistence_buffer(char* buf, size_t cap)
+{
+    g_persist_buf = buf;
+    g_persist_buf_cap = cap;
+}
+
+bool persistence_buffer_active()
+{
+    return g_persist_buf != nullptr;
+}
+
+void proofs_buf_free(char* p)
+{
+    // Only the heap-growing fallback path owns its buffer; the reserved
+    // persistence buffer is never freed.
+    if (p && p != g_persist_buf)
+        free(p);
+}
+
+} // namespace cashu
+
+namespace cashu {
 char* proofs_to_json_buf(const std::vector<Proof>& proofs, size_t* len) {
+    // Reserved-buffer mode when the boot reserve succeeded; otherwise the
+    // tight-growth heap path (degraded but functional for small wallets).
     JsonBuf b;
-    b.need(2 + proofs.size() * 448 + 64);
+    if (g_persist_buf)
+        b = JsonBuf(g_persist_buf, g_persist_buf_cap);
+    else
+        b.need(2 + proofs.size() * 448 + 64);
     b.ch('[');
     for (size_t i = 0; i < proofs.size() && !b.oom; i++) {
         const Proof& p = proofs[i];
@@ -503,13 +545,16 @@ char* proofs_to_json_buf(const std::vector<Proof>& proofs, size_t* len) {
     }
     b.ch(']');
     if (b.oom) {
-        free(b.p);
+        if (b.owned)
+            free(b.p);
         if (len) *len = 0;
         return nullptr;
     }
     if (len) *len = b.n;
-    return b.p;
+    return b.p;  // borrowed when in reserved-buffer mode; owned heap otherwise
 }
+
+} // namespace cashu
 
 bool proofs_from_json(const char* json_str, std::vector<Proof>& out) {
     cJSON* arr = cJSON_Parse(json_str);

@@ -103,7 +103,7 @@ bool Wallet::save_proofs()
     g_wallet_nvs_stat.last_blob = blob_len;
 
     if (blob_len > PROOFS_BLOB_MAX) {
-        free(blob);
+        proofs_buf_free(blob);
         ESP_LOGE(TAG, "save_proofs: blob %u B exceeds the %u B bound — wallet is RAM-ONLY",
                  (unsigned)blob_len, (unsigned)PROOFS_BLOB_MAX);
         g_wallet_nvs_stat.save_fails++;
@@ -114,7 +114,7 @@ bool Wallet::save_proofs()
 
     Nvs nvs(NVS_READWRITE);
     if (!nvs.ok()) {
-        free(blob);
+        proofs_buf_free(blob);
         ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(nvs.err()));
         g_wallet_nvs_stat.save_fails++;
         g_wallet_nvs_stat.last_save_ok = false;
@@ -127,7 +127,7 @@ bool Wallet::save_proofs()
     esp_err_t err = nvs_set_blob(nvs.get(), key, blob, blob_len);
     if (err == ESP_OK)
         err = nvs_commit(nvs.get());
-    free(blob);
+    proofs_buf_free(blob);
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "save_proofs failed: %s", esp_err_to_name(err));
