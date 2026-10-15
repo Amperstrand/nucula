@@ -89,10 +89,11 @@ bool Wallet::save_proofs()
     static constexpr size_t PROOFS_BLOB_MAX = 32 * 1024;
 
     size_t blob_len = 0;
+    // Borrowed pointer into proofs_to_json_buf's static buffer — do not free.
     char* blob = proofs_to_json_buf(proofs_, &blob_len);
     if (!blob) {
-        ESP_LOGE(TAG, "save_proofs: serialization allocation failed (%d proofs) — wallet is RAM-ONLY until this clears",
-                 (int)proofs_.size());
+        ESP_LOGE(TAG, "save_proofs: serialization failed (%d proofs, %u B bound) — wallet is RAM-ONLY",
+                 (int)proofs_.size(), (unsigned)PROOFS_BLOB_MAX);
         g_wallet_nvs_stat.save_fails++;
         g_wallet_nvs_stat.last_save_ok = false;
         g_wallet_nvs_stat.last_err = -1;
@@ -102,7 +103,6 @@ bool Wallet::save_proofs()
     g_wallet_nvs_stat.last_blob = blob_len;
 
     if (blob_len > PROOFS_BLOB_MAX) {
-        free(blob);
         ESP_LOGE(TAG, "save_proofs: blob %u B exceeds the %u B bound — wallet is RAM-ONLY",
                  (unsigned)blob_len, (unsigned)PROOFS_BLOB_MAX);
         g_wallet_nvs_stat.save_fails++;
@@ -113,7 +113,6 @@ bool Wallet::save_proofs()
 
     Nvs nvs(NVS_READWRITE);
     if (!nvs.ok()) {
-        free(blob);
         ESP_LOGE(TAG, "nvs_open failed: %s", esp_err_to_name(nvs.err()));
         g_wallet_nvs_stat.save_fails++;
         g_wallet_nvs_stat.last_save_ok = false;
@@ -126,7 +125,6 @@ bool Wallet::save_proofs()
     esp_err_t err = nvs_set_blob(nvs.get(), key, blob, blob_len);
     if (err == ESP_OK)
         err = nvs_commit(nvs.get());
-    free(blob);
 
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "save_proofs failed: %s", esp_err_to_name(err));
