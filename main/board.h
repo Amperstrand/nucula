@@ -46,6 +46,13 @@
 #define BOARD_LCD_OFFSET_X  52
 #define BOARD_LCD_OFFSET_Y  40
 
+#elif CONFIG_NUCULA_BOARD_NUCULAPCB
+
+// zeugmaster nucula production PCB (ESP32-C3 + PN7160). Pinout proven on
+// the bench by ccid-firmware-rs (pn7160-nci crate transport consts).
+#define BOARD_I2C_SDA_PIN   GPIO_NUM_4
+#define BOARD_I2C_SCL_PIN   GPIO_NUM_5
+
 #else // XIAO ESP32-C3
 
 #define BOARD_I2C_SDA_PIN   GPIO_NUM_6   // D4
