@@ -25,6 +25,7 @@ async fn main() {
     let _ = c.mint_add(&mint);
 
     let mut last_total: Option<u64> = None;
+    let mut last_ckpt: u64 = 0;
     for i in 1..=count {
         let token = nucula_rig::payer::mint_token(&mint, amount).await.expect("mint");
         for attempt in 0..3 {
@@ -49,10 +50,18 @@ async fn main() {
             eprintln!("== after {i}x{amount} == {b}");
             if let (Some(prev), Some(now)) = (last_total, total) {
                 if now < prev {
-                    eprintln!("   *** RESET BOUNDARY: total went {prev} -> {now} (lost {} sats) ***", prev + amount - now);
+                    // The baseline is `last_ckpt` receives ago: credit
+                    // every receive since then before computing the loss.
+                    let expected = prev + (i - last_ckpt) * amount;
+                    eprintln!("   *** RESET BOUNDARY: total went {prev} -> {now} (expected ~{expected}, lost ~{} sats) ***", expected.saturating_sub(now));
                 }
             }
-            last_total = total;
+            // Keep the last VALID baseline: a truncated checkpoint must
+            // not erase it, or a later reset goes unmarked.
+            if total.is_some() {
+                last_total = total;
+                last_ckpt = i;
+            }
             for l in ws.lines().filter(|l| l.contains("saves=") || l.contains("nvs entries")) {
                 eprintln!("   {}", l.trim());
             }

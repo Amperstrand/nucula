@@ -146,11 +146,18 @@ async fn console_relay_money_loop() {
     assert!(!out.contains("error"), "mint add failed: {out}");
 
     fn sat_total(out: &str) -> Option<u64> {
-        out.lines()
-            .find(|l| l.trim_start().starts_with("total:"))
-            .and_then(|l| l.split_whitespace().find_map(|w| w.parse().ok()))
+        if let Some(t) = out.lines().find(|l| l.trim_start().starts_with("total:")) {
+            return t.split_whitespace().find_map(|w| w.parse().ok());
+        }
+        // A clean wallet answers "no proofs" instead of a total line —
+        // that is an explicit zero, not a truncated read.
+        if out.contains("no proofs") {
+            return Some(0);
+        }
+        None
     }
-    let before = sat_total(&atom.cmd("balance").expect("balance before"));
+    let before = sat_total(&atom.cmd("balance").expect("balance before"))
+        .expect("balance before: neither a total nor 'no proofs' — console unreadable");
 
     // The Hades2001 bridge drops chunks under dense lines (rig README);
     // the device can complete a receive whose confirmation never crosses
@@ -162,6 +169,26 @@ async fn console_relay_money_loop() {
     let mut token = token;
     for attempt in 0..3 {
         if attempt > 0 {
+            // Re-establish the balance BEFORE minting again: a receive
+            // may have landed while every confirmation line was dropped.
+            // Minting blind can double-credit the wallet and let a
+            // 2-3 sat total mask the transport result.
+            let mut landed = false;
+            for _ in 0..4 {
+                let balance = atom.cmd("balance").expect("balance recheck");
+                match (before, sat_total(&balance)) {
+                    (Some(b), Some(a)) if a > b => {
+                        landed = true;
+                        break;
+                    }
+                    (Some(b), Some(a)) if a == b => break, // clean: nothing landed
+                    _ => std::thread::sleep(std::time::Duration::from_millis(750)),
+                }
+            }
+            if landed {
+                received = true;
+                break;
+            }
             token = nucula_rig::payer::mint_token(&mint, 1).await.expect("re-mint");
         }
         let recv = atom.cmd(&format!("receive {token}")).expect("receive");

@@ -62,16 +62,24 @@ fn labgrid(action: &str) -> bool {
 fn mint_host_port() -> Result<std::net::SocketAddr, String> {
     use std::net::ToSocketAddrs;
     let mint = relay_mint();
-    let rest = mint
-        .strip_prefix("http://")
-        .ok_or_else(|| format!("MINT_URL must start with http:// (got {mint})"))?;
-    let (host, port) = match rest.rsplit_once(':') {
+    // No URL crate: split scheme, authority and path by hand. A base
+    // path is legal (the payer and firmware use it) and must not leak
+    // into the port parse; https is probed on its default port.
+    let (default_port, rest) = if let Some(r) = mint.strip_prefix("https://") {
+        (443u16, r)
+    } else if let Some(r) = mint.strip_prefix("http://") {
+        (3338u16, r)
+    } else {
+        return Err(format!("MINT_URL must start with http:// or https:// (got {mint})"));
+    };
+    let authority = rest.split('/').next().unwrap_or(rest);
+    let (host, port) = match authority.rsplit_once(':') {
         Some((h, p)) => (
             h,
             p.parse::<u16>()
                 .map_err(|_| format!("bad port in MINT_URL: {mint}"))?,
         ),
-        None => (rest, 3338),
+        None => (authority, default_port),
     };
     (host, port)
         .to_socket_addrs()
@@ -153,13 +161,16 @@ pub struct RigGuard {
     pub report: PreflightReport,
 }
 
-/// Per-board flock name (e.g. `atom-9d529068b4`, `m5stick-49d6163ebe`):
-/// the machine-wide lock convention is keyed by the board's serial
-/// identity, so the two boards lock independently and a conflict report
-/// names the board it belongs to.
+/// Flock name derived from the serial port the console will ACTUALLY
+/// open (atom_port(), honoring ATOM_PORT). Keying by probed board
+/// identity allowed an override to open one board's port under another
+/// board's lock — and in the flock-only fallback, two runs on the same
+/// physical device under different lock names. The by-id basename is
+/// unique per device, so identity-by-port is correct by construction.
 fn board_flock_name() -> String {
-    let board = super::detect_board();
-    format!("{}-{}", board.name(), board.lock_id())
+    let port = super::atom_default_port();
+    let tail = port.rsplit('/').next().unwrap_or("unknown");
+    format!("port-{}", tail)
 }
 
 impl RigGuard {
