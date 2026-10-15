@@ -176,12 +176,12 @@ async fn console_relay_money_loop() {
             let mut landed = false;
             for _ in 0..4 {
                 let balance = atom.cmd("balance").expect("balance recheck");
-                match (before, sat_total(&balance)) {
-                    (Some(b), Some(a)) if a > b => {
+                match sat_total(&balance) {
+                    Some(a) if a > before => {
                         landed = true;
                         break;
                     }
-                    (Some(b), Some(a)) if a == b => break, // clean: nothing landed
+                    Some(a) if a == before => break, // clean: nothing landed
                     _ => std::thread::sleep(std::time::Duration::from_millis(750)),
                 }
             }
@@ -196,8 +196,8 @@ async fn console_relay_money_loop() {
         for _ in 0..4 {
             let balance = atom.cmd("balance").expect("balance");
             eprintln!("{balance}");
-            match (before, sat_total(&balance)) {
-                (Some(b), Some(a)) if a > b => {
+            match sat_total(&balance) {
+                Some(a) if a > before => {
                     received = true;
                     break;
                 }
