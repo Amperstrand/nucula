@@ -92,10 +92,9 @@ bool cashu_json_run_tests();
 // Blob serialization for NVS persistence
 // Streaming NVS-blob serializer: returns a malloc'd buffer (caller
 // frees) and its length, or nullptr on allocation failure. The cJSON
-// Hex-only fields are written raw; `witness` is the only escaped string.
-// Returns a BORROWED pointer into a static buffer (sized to the 32 KiB
-// persistence bound): valid until the next call, must NOT be freed.
-// Single-writer: callers hold the wallet_store lock.
+// tree+print+copy path needed three full transients and failed above
+// ~60 proofs on the ESP32 heap (nucula#1). Hex-only fields are written
+// raw; `witness` is the only escaped string.
 char* proofs_to_json_buf(const std::vector<Proof>& proofs, size_t* len);
 
 bool proofs_from_json(const char* json_str, std::vector<Proof>& out);

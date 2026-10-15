@@ -428,18 +428,8 @@ struct JsonBuf {
     char* p = nullptr;
     size_t n = 0, cap = 0;
     bool oom = false;
-    bool owned = true;
-    JsonBuf() = default;
-    // Fixed external buffer: overflow sets oom instead of growing — used
-    // for the persistence serialization so a save can never fail on heap
-    // fragmentation (see proofs_to_json_buf).
-    JsonBuf(char* ext, size_t extcap) : p(ext), cap(extcap), owned(false) {}
     void need(size_t extra) {
         if (oom || n + extra <= cap) return;
-        if (!owned) {
-            oom = true;
-            return;
-        }
         size_t nc = cap ? cap * 2 : 256;
         while (nc < n + extra) nc *= 2;
         char* q = static_cast<char*>(realloc(p, nc));
@@ -476,20 +466,8 @@ struct JsonBuf {
 } // namespace
 
 char* proofs_to_json_buf(const std::vector<Proof>& proofs, size_t* len) {
-    // Fragmentation-immune persistence serialization: the buffer is a
-    // fixed .bss region sized to the persistence bound. The previous
-    // heap-growing version demanded power-of-two sized contiguous blocks
-    // (64 KiB for a ~31 KiB proof set) exactly when the wallet grew
-    // past ~70 proofs — mid-receive the largest free heap block is
-    // smaller, so every save failed identically and the wallet silently
-    // became RAM-ONLY (bench incident: soak cycle 46; fork issue
-    // "permanent all-saves-fail state"). A static buffer cannot fail on
-    // fragmentation; the only failure mode is exceeding the bound
-    // itself, which is the designed fail-stop.
-    // Single writer: every caller runs under the wallet_store lock.
-    static constexpr size_t PERSIST_BOUND = 32 * 1024;
-    static char s_buf[PERSIST_BOUND];
-    JsonBuf b(s_buf, PERSIST_BOUND);
+    JsonBuf b;
+    b.need(2 + proofs.size() * 448 + 64);
     b.ch('[');
     for (size_t i = 0; i < proofs.size() && !b.oom; i++) {
         const Proof& p = proofs[i];
@@ -521,9 +499,8 @@ char* proofs_to_json_buf(const std::vector<Proof>& proofs, size_t* len) {
         b.ch('}');
     }
     b.ch(']');
-    // Borrowed pointer into the static buffer: valid until the next call.
-    // Callers must NOT free it.
     if (b.oom) {
+        free(b.p);
         if (len) *len = 0;
         return nullptr;
     }
