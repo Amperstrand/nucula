@@ -1,21 +1,32 @@
-//! Boundary probe: drive the wallet balance toward the ~790-sat
-//! persistence-failure boundary with wstat checkpoints after every few
+//! Boundary probe: drive the wallet balance toward the persistence-
+//! failure boundary (fork docs said ~790 sat; the 2026-10-15 soak saw a
+//! wallet-state reset at ~714) with wstat checkpoints after every few
 //! receives, then report the final state. Run with the rig held.
+//!
+//! Env: NUCULA_PROBE_COUNT / NUCULA_PROBE_AMOUNT (defaults 18 x 42 =
+//! 756 sat, just past the observed boundary).
 
 use std::time::Duration;
 
 use nucula_rig::atom_console::AtomConsole;
 
+fn env_or(name: &str, default: u64) -> u64 {
+    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+}
+
 #[tokio::main]
 async fn main() {
-    let mint = "http://192.168.13.221:3338";
+    let mint = nucula_rig::rig::relay_mint();
+    let count = env_or("NUCULA_PROBE_COUNT", 18);
+    let amount = env_or("NUCULA_PROBE_AMOUNT", 42);
     let _rig = nucula_rig::rig::RigGuard::acquire().expect("rig");
 
     let mut c = AtomConsole::open(&nucula_rig::atom_default_port()).expect("console");
-    let _ = c.mint_add(mint);
+    let _ = c.mint_add(&mint);
 
-    for i in 1..=10u32 {
-        let token = nucula_rig::payer::mint_token(mint, 42).await.expect("mint");
+    let mut last_total: Option<u64> = None;
+    for i in 1..=count {
+        let token = nucula_rig::payer::mint_token(&mint, amount).await.expect("mint");
         for attempt in 0..3 {
             if let Ok(out) = c.cmd(&format!("receive {token}")) {
                 if out.contains("received") {
@@ -27,11 +38,21 @@ async fn main() {
             }
             std::thread::sleep(Duration::from_millis(1500));
         }
-        if i % 3 == 0 {
+        if i % 3 == 0 || i == count {
             let bal = c.cmd("balance").unwrap_or_default();
             let ws = c.cmd("wstat").unwrap_or_default();
-            let b = bal.lines().find(|l| l.contains("total:")).unwrap_or("?").trim();
-            eprintln!("== after {i}x42 == {b}");
+            let total_line = bal.lines().find(|l| l.contains("total:"));
+            let total: Option<u64> = total_line.and_then(|l| {
+                l.split_whitespace().find_map(|w| w.parse().ok())
+            });
+            let b = total_line.unwrap_or("?").trim();
+            eprintln!("== after {i}x{amount} == {b}");
+            if let (Some(prev), Some(now)) = (last_total, total) {
+                if now < prev {
+                    eprintln!("   *** RESET BOUNDARY: total went {prev} -> {now} (lost {} sats) ***", prev + amount - now);
+                }
+            }
+            last_total = total;
             for l in ws.lines().filter(|l| l.contains("saves=") || l.contains("nvs entries")) {
                 eprintln!("   {}", l.trim());
             }
