@@ -1,5 +1,4 @@
 #include <esp_log.h>
-#include <esp_heap_caps.h>
 #include "task_config.h"
 #include <esp_random.h>
 #include <freertos/FreeRTOS.h>
@@ -117,17 +116,6 @@ extern "C" void app_main(void)
 
     if (wifi_init() != ESP_OK)
         ESP_LOGE(TAG, "wifi failed, continuing offline");
-
-    // Reserve the persistence serialization buffer while the heap is
-    // still pristine: every wallet save then writes into this block,
-    // allocation-free and immune to fragmentation. (Mid-receive the
-    // largest free block shrinks below what a ~31 KiB proof set needs —
-    // the permanent RAM-ONLY incident; 32 KiB mirrors the save bound.)
-    if (char* pbuf = (char*)heap_caps_malloc(32 * 1024, MALLOC_CAP_DEFAULT)) {
-        cashu::set_persistence_buffer(pbuf, 32 * 1024);
-    } else {
-        ESP_LOGE(TAG, "persistence buffer reserve failed — saves use the heap-growing fallback");
-    }
 
     // Reserve the console's allocations FIRST, while heap is plentiful, so
     // its USB driver + line buffer always succeed. (Initializing it last
