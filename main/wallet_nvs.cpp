@@ -1,5 +1,6 @@
 #include "wallet.hpp"
 #include "wallet_internal.hpp"
+#include "esp_heap_caps.h"
 #include "wallet_wstat.h"
 #include "cashu_json.hpp"
 
@@ -150,6 +151,21 @@ bool Wallet::load_proofs()
     slot_key(key, sizeof(key), "proofs", nvs_slot_);
     std::string blob;
     if (!nvs.get_blob(key, blob)) {
+        g_wallet_nvs_stat.load_fails++;
+        return false;
+    }
+
+    // Fail-soft load: the cJSON tree + proof vector need roughly 2.5x the
+    // blob in heap transients. When the largest free block cannot cover
+    // that, parsing anyway ends in a bad_alloc that the no-exceptions
+    // build turns into abort() at BOOT (boot-loop, bench-proven
+    // 2026-10-15). Refuse loudly instead: the wallet boots empty-but-
+    // alive and the state stays recoverable.
+    size_t need = blob.size() + blob.size() / 2 + 8 * 1024;
+    size_t largest = heap_caps_get_largest_free_block(MALLOC_CAP_DEFAULT);
+    if (largest < need) {
+        ESP_LOGE(TAG, "load_proofs: largest heap block %u < %u needed for a %u B blob — skipping proof load (boot continues)",
+                 (unsigned)largest, (unsigned)need, (unsigned)blob.size());
         g_wallet_nvs_stat.load_fails++;
         return false;
     }

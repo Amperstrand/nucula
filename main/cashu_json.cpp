@@ -430,8 +430,11 @@ struct JsonBuf {
     bool oom = false;
     void need(size_t extra) {
         if (oom || n + extra <= cap) return;
-        size_t nc = cap ? cap * 2 : 256;
-        while (nc < n + extra) nc *= 2;
+        // Tight growth (payload + 12.5% + 256 B, single realloc): the old
+        // power-of-two ladder demanded 64 KiB contiguous for a ~31 KiB
+        // proof set — beyond the largest free heap block at save time, so
+        // every save failed identically (the permanent RAM-ONLY incident).
+        size_t nc = n + extra + (n + extra) / 8 + 256;
         char* q = static_cast<char*>(realloc(p, nc));
         if (!q) { oom = true; return; }
         p = q;
