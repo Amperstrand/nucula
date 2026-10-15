@@ -159,12 +159,11 @@ async fn console_relay_money_loop() {
     // fresh token only if nothing landed. A resent spent token merely
     // warns on-device, which is expected noise here.
     let mut received = false;
+    let mut token = token;
     for attempt in 0..3 {
-        let token = if attempt == 0 {
-            token
-        } else {
-            nucula_rig::payer::mint_token(&mint, 1).await.expect("re-mint")
-        };
+        if attempt > 0 {
+            token = nucula_rig::payer::mint_token(&mint, 1).await.expect("re-mint");
+        }
         let recv = atom.cmd(&format!("receive {token}")).expect("receive");
         eprintln!("{recv}");
         for _ in 0..4 {
