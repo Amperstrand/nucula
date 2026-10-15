@@ -1,9 +1,13 @@
 # Build output
 build/
+build-*/
 
 # ESP-IDF generated config (sdkconfig.defaults is tracked instead)
 sdkconfig
 sdkconfig.old
+sdkconfig.*
+!sdkconfig.defaults
+!sdkconfig.defaults.*
 
 # ESP-IDF managed components (auto-downloaded)
 managed_components/

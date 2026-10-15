@@ -155,6 +155,7 @@ static void ssd1309_send_cmds(const uint8_t *cmds, size_t len)
 
 void display_init(i2c_master_bus_handle_t bus)
 {
+#if CONFIG_NUCULA_BOARD_NUCULA_V2
     // Headless prototype bring-up: hold OLED boost off and reset asserted.
     gpio_set_level(BOARD_OLED_POWER_PIN, 0);
     gpio_set_direction(BOARD_OLED_POWER_PIN, GPIO_MODE_OUTPUT);
@@ -162,9 +163,10 @@ void display_init(i2c_master_bus_handle_t bus)
     gpio_set_direction(PIN_RST, GPIO_MODE_OUTPUT);
     ESP_LOGW(TAG, "display disconnected: OLED power off");
     return;
+#endif
 
-    // Legacy display initialization below is inactive. Before enabling the
-    // v2 panel, implement its inverted reset and switched boost sequencing.
+    // Legacy display initialization below. Before enabling the v2 panel,
+    // implement its inverted reset and switched boost sequencing.
     if (!bus) {
         ESP_LOGW(TAG, "no I2C bus, display disabled");
         return;

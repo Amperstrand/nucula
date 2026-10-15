@@ -190,7 +190,7 @@ extern "C" void app_main(void)
     }
 
     if (!nfc_init(i2c_bus_get()))
-        ESP_LOGW(TAG, "PN7160 init failed, NFC disabled");
+        ESP_LOGW(TAG, "NFC frontend init failed, NFC disabled");
 
     ui_refresh();
 }
