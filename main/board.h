@@ -53,6 +53,11 @@
 #define BOARD_I2C_SDA_PIN   GPIO_NUM_4
 #define BOARD_I2C_SCL_PIN   GPIO_NUM_5
 
+// No SSD1309 on this board — and GPIO5 is SCL here: driving an OLED
+// reset on it would rip SCL out of I2C mode before nfc_init() probes
+// the PN7160 (the "silent PN7160" bench incident, fork issue #12).
+#define BOARD_OLED_RST_PIN (-1)
+
 #else // XIAO ESP32-C3
 
 #define BOARD_I2C_SDA_PIN   GPIO_NUM_6   // D4
@@ -66,7 +71,9 @@
 // SSD1309 OLED (SA0 low = 0x3C, SA0 high = 0x3D)
 #define BOARD_OLED_ADDR     0x3C
 // Optional hardware reset pin (XIAO D3). Set to -1 if not wired.
+#ifndef BOARD_OLED_RST_PIN
 #define BOARD_OLED_RST_PIN  GPIO_NUM_5
+#endif
 
 // PCF8574 keypad I/O expander
 #define BOARD_KEYPAD_ADDR   0x20

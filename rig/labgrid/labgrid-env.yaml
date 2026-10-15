@@ -1,11 +1,15 @@
-# Labgrid environment for the nucula atom rig. The place matches
-# resources that ALREADY exist on the shared coordinator — no new
-# exporter: the atom token comes from the microfips bench
-# (ai-legion-small-microfips/atom-b-serial) and the ACR1252 from the
-# bolty rig (ai-legion-small/acr1252). Acquiring this place therefore
-# excludes BOTH other projects from the same hardware.
+# Labgrid environment for the nucula rig (pytest flow). The place matches
+# resources that ALREADY exist on the ai-legion (.208) coordinator — no
+# new exporter: the M5Stick serial (ai-legion-nfc/m5stick-usb) and the
+# ACR1252 (ai-legion-nfc/ref-acr1252). Acquiring the place excludes other
+# projects from that hardware.
 #
-#   pytest --lg-env rig/labgrid/labgrid-env.yaml --lg-coordinator 192.168.13.221:20408
+# NOTE: no rig atom is wired on this bench — Board::Atom runs are guarded
+# by the host-local flock only until an atom serial resource is added to
+# nucula-place.sh (the M5STACK device on ttyUSB1 is the micronuts QR
+# rig's, not ours).
+#
+#   pytest --lg-env rig/labgrid/labgrid-env.yaml --lg-coordinator 192.168.13.208:20408
 imports:
   - labgrid_resources.py
 targets:

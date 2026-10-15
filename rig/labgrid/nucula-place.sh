@@ -19,6 +19,9 @@ else
     echo "place $PLACE created"
 fi
 
+# Scope: m5stick + ACR only. No rig atom is wired on this bench — Board::Atom runs
+# rely on the host-local flock alone until an atom serial resource is added here
+# (the M5STACK device on ttyUSB1 belongs to the micronuts QR rig).
 lg add-match 'ai-legion-nfc/m5stick-usb/SerialPort'
 lg add-match 'ai-legion-nfc/ref-acr1252/USBDevice'
 lg show | sed -n '1,6p'

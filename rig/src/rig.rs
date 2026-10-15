@@ -59,14 +59,25 @@ fn labgrid(action: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn mint_host_port() -> (String, u16) {
-    // relay_mint() is "http://IP:PORT"; parse without an HTTP dep.
+fn mint_host_port() -> Result<std::net::SocketAddr, String> {
+    use std::net::ToSocketAddrs;
     let mint = relay_mint();
-    let rest = mint.trim_start_matches("http://");
-    let mut it = rest.split(':');
-    let host = it.next().unwrap_or("192.168.13.208").to_owned();
-    let port = it.next().and_then(|p| p.parse().ok()).unwrap_or(3338);
+    let rest = mint
+        .strip_prefix("http://")
+        .ok_or_else(|| format!("MINT_URL must start with http:// (got {mint})"))?;
+    let (host, port) = match rest.rsplit_once(':') {
+        Some((h, p)) => (
+            h,
+            p.parse::<u16>()
+                .map_err(|_| format!("bad port in MINT_URL: {mint}"))?,
+        ),
+        None => (rest, 3338),
+    };
     (host, port)
+        .to_socket_addrs()
+        .map_err(|e| format!("cannot resolve {host}:{port}: {e}"))?
+        .next()
+        .ok_or_else(|| format!("no address for {host}:{port}"))
 }
 
 /// Check device state; with `repair`, also fix what is safe to fix.
@@ -118,14 +129,15 @@ pub fn preflight(repair: bool) -> PreflightReport {
     }
 
     // Mint: TCP reachability of the LAN bind.
-    let (host, port) = mint_host_port();
-    let addr = format!("{host}:{port}");
-    r.mint = match TcpStream::connect_timeout(
-        &addr.parse().expect("mint address"),
-        Duration::from_secs(2),
-    ) {
-        Ok(_) => format!("{addr} reachable"),
-        Err(_) => format!("{addr} DOWN — run /tmp/opencode/rig/start-mint.sh"),
+    r.mint = match mint_host_port() {
+        Ok(addr) => {
+            let addr_str = addr.to_string();
+            match TcpStream::connect_timeout(&addr, Duration::from_secs(2)) {
+                Ok(_) => format!("{addr_str} reachable"),
+                Err(_) => format!("{addr_str} DOWN — run rig/scripts/start-mint.sh"),
+            }
+        }
+        Err(e) => format!("bad MINT_URL: {e}"),
     };
 
     r
