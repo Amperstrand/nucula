@@ -48,9 +48,9 @@ struct BinWriter {
     }
     void raw(const void *d, size_t l) { need(l); if (!oom) { memcpy(p + n, d, l); n += l; } }
     void u8(unsigned char v) { raw(&v, 1); }
-    void u16(unsigned v) { unsigned char b[2] = {unsigned char(v), unsigned char(v >> 8)}; raw(b, 2); }
-    void i32(int v) { unsigned u = unsigned(v); unsigned char b[4] = {unsigned char(u), unsigned char(u >> 8), unsigned char(u >> 16), unsigned char(u >> 24)}; raw(b, 4); }
-    void u32(unsigned v) { unsigned char b[4] = {unsigned char(v), unsigned char(v >> 8), unsigned char(v >> 16), unsigned char(v >> 24)}; raw(b, 4); }
+    void u16(unsigned v) { unsigned char b[2] = {static_cast<unsigned char>(v), static_cast<unsigned char>(v >> 8)}; raw(b, 2); }
+    void i32(int v) { unsigned u = static_cast<unsigned>(v); unsigned char b[4] = {static_cast<unsigned char>(u), static_cast<unsigned char>(u >> 8), static_cast<unsigned char>(u >> 16), static_cast<unsigned char>(u >> 24)}; raw(b, 4); }
+    void u32(unsigned v) { unsigned char b[4] = {static_cast<unsigned char>(v), static_cast<unsigned char>(v >> 8), static_cast<unsigned char>(v >> 16), static_cast<unsigned char>(v >> 24)}; raw(b, 4); }
     // Fixed-length hex field (length implied by the byte count).
     void hex_fixed(const std::string &h, size_t bytes) {
         unsigned char buf[64];
@@ -82,9 +82,9 @@ struct BinReader {
         return true;
     }
     unsigned char u8v() { unsigned char v = 0; take(1, &v); return v; }
-    unsigned u16v() { unsigned char b[2] = {0, 0}; take(2, b); return unsigned(b[0]) | unsigned(b[1]) << 8; }
-    int i32v() { unsigned char b[4] = {0, 0, 0, 0}; take(4, b); return int(unsigned(b[0]) | unsigned(b[1]) << 8 | unsigned(b[2]) << 16 | unsigned(b[3]) << 24); }
-    unsigned u32v() { unsigned char b[4] = {0, 0, 0, 0}; take(4, b); return unsigned(b[0]) | unsigned(b[1]) << 8 | unsigned(b[2]) << 16 | unsigned(b[3]) << 24; }
+    unsigned u16v() { unsigned char b[2] = {0, 0}; take(2, b); return static_cast<unsigned>(b[0]) | static_cast<unsigned>(b[1]) << 8; }
+    int i32v() { unsigned char b[4] = {0, 0, 0, 0}; take(4, b); return static_cast<int>(static_cast<unsigned>(b[0]) | static_cast<unsigned>(b[1]) << 8 | static_cast<unsigned>(b[2]) << 16 | static_cast<unsigned>(b[3]) << 24); }
+    unsigned u32v() { unsigned char b[4] = {0, 0, 0, 0}; take(4, b); return static_cast<unsigned>(b[0]) | static_cast<unsigned>(b[1]) << 8 | static_cast<unsigned>(b[2]) << 16 | static_cast<unsigned>(b[3]) << 24; }
     static std::string hex_str(const unsigned char *d, size_t l) {
         std::string s;
         s.resize(l * 2 + 1);
