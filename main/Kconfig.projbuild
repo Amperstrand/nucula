@@ -15,6 +15,14 @@ menu "Nucula"
                 PCF8574 keypad. NFC role: the wallet emulates a Type 4
                 NDEF tag and the payer reads/writes it.
 
+        config NUCULA_BOARD_NUCULAPCB
+            bool "Nucula PCB (zeugmaster production board, ESP32-C3 + PN7160 card emulation)"
+            help
+                The production nucula board: ESP32-C3 with PN7160 in NFC
+                card-emulation role (same role as XIAO), no display/keypad.
+                Pin map differs from XIAO: SDA 4 / SCL 5 / IRQ 6 / VEN 7,
+                proven on the bench by ccid-firmware-rs.
+
         config NUCULA_BOARD_ATOM
             bool "M5Stack Atom Matrix + MFRC522 (NFC reader mode)"
             help

@@ -2,7 +2,10 @@
 #include "console.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
+#include "soc/soc_caps.h"
+// Guard on SoC capability, not NUCULA_BOARD: build lanes merge only
+// sdkconfig.defaults, so the board kconfig defaults to XIAO even on esp32.
+#if !SOC_USB_SERIAL_JTAG_SUPPORTED
 #include "driver/uart.h"
 #else
 #include "driver/usb_serial_jtag.h"
@@ -13,7 +16,7 @@
 #include <cstdarg>
 #include <vector>
 
-#if CONFIG_NUCULA_BOARD_ATOM || CONFIG_NUCULA_BOARD_M5STICK
+#if !SOC_USB_SERIAL_JTAG_SUPPORTED
 // Classic ESP32 has no USB-serial-JTAG peripheral; the console rides
 // UART0 through the on-board CH340.
 #define CONSOLE_UART_NUM UART_NUM_0

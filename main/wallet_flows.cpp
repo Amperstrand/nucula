@@ -395,6 +395,10 @@ bool Wallet::swap(std::vector<Proof>& inputs, int amount,
 bool Wallet::receive(const Token& token, std::vector<Proof>& proofs_out)
 {
     last_error_ = {};
+    if (degraded_) {
+        last_error_ = MintError{0, -1, "wallet is DEGRADED (proof load was skipped at boot) - reboot to recover; persisted proofs are protected"};
+        return false;
+    }
     if (token.proofs.empty()) {
         ESP_LOGE(TAG, "receive: token has no proofs");
         return false;

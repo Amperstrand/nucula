@@ -166,8 +166,7 @@ async fn main() {
         .or_else(|| std::env::var("NUCULA_SOAK_HOURS").ok())
         .and_then(|s| s.trim_start_matches("--hours ").parse().ok())
         .unwrap_or(8);
-    let mint =
-        std::env::var("MINT_URL").unwrap_or_else(|_| nucula_rig::rig::DEFAULT_RELAY_MINT.into());
+    let mint = nucula_rig::rig::relay_mint();
 
     let results = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("results");
     std::fs::create_dir_all(&results).expect("results dir");
@@ -257,15 +256,23 @@ async fn main() {
         std::thread::sleep(Duration::from_secs(5));
 
         if soak.cycles % SNAPSHOT_EVERY == 0 {
-            if let (Ok(heap), Ok(tasks)) = (console.cmd("heap"), console.cmd("tasks")) {
-                soak.event(
-                    "snapshot",
-                    &[
-                        ("heap", heap.trim().to_string()),
-                        ("tasks", tasks.trim().to_string()),
-                    ],
-                );
-            }
+            // Each telemetry command is independent: a flaky-bridge error
+            // on one must not discard the whole snapshot (Codex P2) —
+            // record the failure string for that field instead.
+            let field = |r: Result<String, _>| match r {
+                Ok(v) => v.trim().to_string(),
+                Err(e) => format!("<cmd failed: {e}>"),
+            };
+            soak.event(
+                "snapshot",
+                &[
+                    ("heap", field(console.cmd("heap"))),
+                    ("tasks", field(console.cmd("tasks"))),
+                    // wstat: wallet-persistence witness (firmware
+                    // commands_system.cpp) — the NVS-decay signal, gap iv.
+                    ("wstat", field(console.cmd("wstat"))),
+                ],
+            );
         }
 
         if soak.cycles % REBOOT_EVERY == 0 {
@@ -329,6 +336,18 @@ async fn run_cycle(c: &mut AtomConsole, mint: &str, amount: u64) -> Result<(), S
         std::thread::sleep(Duration::from_millis(2000));
     }
     if !recv.contains("received") {
+        // Invisible success: the bridge can swallow the confirmation line
+        // while the device credits the token (the same class the money-loop
+        // e2e now guards against — bench-proven 2026-10-15, 74 sat on the
+        // wallet after a soak abort). The balance delta is authoritative;
+        // only a missing +amount is a real failure, and avoiding the
+        // needless recovery reboot also avoids the reboot console-loss
+        // abort path.
+        if let Ok(after) = read_balance(c) {
+            if after == before + amount {
+                return Ok(());
+            }
+        }
         return Err(format!("receive did not complete: {recv_err}"));
     }
 

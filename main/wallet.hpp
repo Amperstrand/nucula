@@ -167,7 +167,14 @@ public:
     // dropped from the wallet without landing in NVS first.
     bool remove_proofs(const std::vector<Proof>& to_remove);
 
+public:
+    // Set when the persisted proofs could not be loaded (heap preflight):
+    // every mutating flow must refuse so the next save cannot overwrite
+    // the persisted state we failed to load.
+    bool degraded() const { return degraded_; }
+
 private:
+    bool degraded_ = false;
     std::string mint_url_;
     std::vector<Keyset> keysets_;
     std::vector<Proof> proofs_;

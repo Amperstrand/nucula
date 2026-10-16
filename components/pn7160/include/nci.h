@@ -6,8 +6,16 @@
 #include "driver/i2c_master.h"
 #include "driver/gpio.h"
 
-// PN7160 control pins (XIAO ESP32-C3). The I2C bus itself is owned by the
-// application and passed into nci_init().
+// PN7160 control pins (board-dependent). The I2C bus itself is owned by
+// the application and passed into nci_init().
+#if CONFIG_NUCULA_BOARD_NUCULAPCB
+// zeugmaster nucula PCB: pinout proven on the bench by ccid-firmware-rs
+// (crates/pn7160-nci transport consts, unit-asserted). DWL is not wired —
+// the chip runs NCI with DWL undriven (ccid-firmware-rs never drives a
+// DWL line on this board).
+#define PN7160_IRQ_PIN   GPIO_NUM_6
+#define PN7160_VEN_PIN   GPIO_NUM_7
+#else // XIAO ESP32-C3
 // VEN is on GPIO 2 (a boot strapping pin) — empirically OK at boot because
 // the ESP weak internal pull-up wins over the PN7160 VEN input leakage.
 // DWL is left on an unused output (no external wire); PN7160 defaults to
@@ -15,6 +23,7 @@
 #define PN7160_IRQ_PIN   GPIO_NUM_3    // D1
 #define PN7160_VEN_PIN   GPIO_NUM_2    // D0
 #define PN7160_DWL_PIN   GPIO_NUM_4    // D2 (dangling)
+#endif
 
 // PN7160 I2C address (both addr pins NC = default)
 #define PN7160_I2C_ADDR  0x28

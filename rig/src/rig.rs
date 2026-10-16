@@ -3,10 +3,10 @@
 //! returns shared hardware to normal.
 //!
 //! Locking is two-layered: the PRIMARY is the shared labgrid
-//! coordinator (place `nucula-rig` matching the atom token exported by
-//! the microfips bench and the ACR1252 token exported by the bolty rig
-//! — acquiring excludes both projects). The FALLBACK is the
-//! machine-wide flock convention (see [`crate::locks`]) when the
+//! coordinator (place `nucula-rig` matching the m5stick serial and the
+//! reference ACR1252 tokens exported by the ai-legion-nfc bench
+//! exporter — acquiring excludes the other bench users). The FALLBACK
+//! is the machine-wide flock convention (see [`crate::locks`]) when the
 //! coordinator is unreachable. Both are held when labgrid works:
 //! a coordinator crash mid-run must not silently drop exclusivity.
 
@@ -19,12 +19,18 @@ use crate::acr::Acr1252;
 use crate::atom_console::AtomConsole;
 use crate::locks::DeviceLock;
 
-pub const LABGRID_COORDINATOR: &str = "192.168.13.221:20408";
+pub const LABGRID_COORDINATOR: &str = "192.168.13.208:20408";
 pub const LABGRID_PLACE: &str = "nucula-rig";
-pub const LABGRID_CLIENT: &str = "/home/ubuntu/.local/bin/labgrid-client";
+pub const LABGRID_CLIENT: &str = "/usr/local/bin/labgrid-client";
 /// The mint's LAN bind — the atom must reach the URL embedded in its
 /// tokens; preflight checks reachability.
-pub const DEFAULT_RELAY_MINT: &str = "http://192.168.13.221:3338";
+pub const DEFAULT_RELAY_MINT: &str = "http://192.168.13.208:3338";
+
+/// The relay mint URL: `MINT_URL` overrides the bench default (same
+/// convention as the payer tests — see payer.rs `mint_base`).
+pub fn relay_mint() -> String {
+    std::env::var("MINT_URL").unwrap_or_else(|_| DEFAULT_RELAY_MINT.into())
+}
 
 #[derive(Default)]
 pub struct PreflightReport {
@@ -53,13 +59,33 @@ fn labgrid(action: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn mint_host_port() -> (&'static str, u16) {
-    // DEFAULT_RELAY_MINT is "http://IP:PORT"; parse without an HTTP dep.
-    let rest = DEFAULT_RELAY_MINT.trim_start_matches("http://");
-    let mut it = rest.split(':');
-    let host = it.next().unwrap_or("192.168.13.221");
-    let port = it.next().and_then(|p| p.parse().ok()).unwrap_or(3338);
+fn mint_host_port() -> Result<std::net::SocketAddr, String> {
+    use std::net::ToSocketAddrs;
+    let mint = relay_mint();
+    // No URL crate: split scheme, authority and path by hand. A base
+    // path is legal (the payer and firmware use it) and must not leak
+    // into the port parse; https is probed on its default port.
+    let (default_port, rest) = if let Some(r) = mint.strip_prefix("https://") {
+        (443u16, r)
+    } else if let Some(r) = mint.strip_prefix("http://") {
+        (80u16, r)
+    } else {
+        return Err(format!("MINT_URL must start with http:// or https:// (got {mint})"));
+    };
+    let authority = rest.split('/').next().unwrap_or(rest);
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((h, p)) => (
+            h,
+            p.parse::<u16>()
+                .map_err(|_| format!("bad port in MINT_URL: {mint}"))?,
+        ),
+        None => (authority, default_port),
+    };
     (host, port)
+        .to_socket_addrs()
+        .map_err(|e| format!("cannot resolve {host}:{port}: {e}"))?
+        .next()
+        .ok_or_else(|| format!("no address for {host}:{port}"))
 }
 
 /// Check device state; with `repair`, also fix what is safe to fix.
@@ -111,14 +137,15 @@ pub fn preflight(repair: bool) -> PreflightReport {
     }
 
     // Mint: TCP reachability of the LAN bind.
-    let (host, port) = mint_host_port();
-    let addr = format!("{host}:{port}");
-    r.mint = match TcpStream::connect_timeout(
-        &addr.parse().expect("mint address"),
-        Duration::from_secs(2),
-    ) {
-        Ok(_) => format!("{addr} reachable"),
-        Err(_) => format!("{addr} DOWN — run /tmp/opencode/rig/start-mint.sh"),
+    r.mint = match mint_host_port() {
+        Ok(addr) => {
+            let addr_str = addr.to_string();
+            match TcpStream::connect_timeout(&addr, Duration::from_secs(2)) {
+                Ok(_) => format!("{addr_str} reachable"),
+                Err(_) => format!("{addr_str} DOWN — run rig/scripts/start-mint.sh"),
+            }
+        }
+        Err(e) => format!("bad MINT_URL: {e}"),
     };
 
     r
@@ -130,8 +157,31 @@ pub fn preflight(repair: bool) -> PreflightReport {
 pub struct RigGuard {
     labgrid_held: bool,
     _acr_lock: DeviceLock,
-    _atom_lock: DeviceLock,
+    _port_lock: DeviceLock,
+    /// Legacy board-named lock, held ALONGSIDE the port-derived one so a
+    /// rig of the previous generation overlapping this one still excludes
+    /// on the shared name (Codex P1: identity drift between versions).
+    _legacy_board_lock: DeviceLock,
     pub report: PreflightReport,
+}
+
+/// Flock name derived from the serial port the console will ACTUALLY
+/// open (atom_port(), honoring ATOM_PORT). Keying by probed board
+/// identity allowed an override to open one board's port under another
+/// board's lock — and in the flock-only fallback, two runs on the same
+/// physical device under different lock names. The by-id basename is
+/// unique per device, so identity-by-port is correct by construction.
+fn board_flock_name() -> String {
+    let port = super::atom_default_port();
+    let tail = port.rsplit('/').next().unwrap_or("unknown");
+    format!("port-{}", tail)
+}
+
+/// The pre-port-identity lock name (e.g. `atom-9d529068b4`), kept so
+/// overlapping rig generations still exclude each other.
+fn legacy_board_flock_name() -> String {
+    let board = super::detect_board();
+    format!("{}-{}", board.name(), board.lock_id())
 }
 
 impl RigGuard {
@@ -140,8 +190,10 @@ impl RigGuard {
         // Locks: always. Machine-wide convention covers non-labgrid
         // users; labgrid covers cross-host users of the coordinator.
         let acr_lock = DeviceLock::acquire("acr1252").map_err(|e| format!("preflight: {e}"))?;
-        let atom_lock =
-            DeviceLock::acquire("atom-9d529068b4").map_err(|e| format!("preflight: {e}"))?;
+        let port_lock =
+            DeviceLock::acquire(&board_flock_name()).map_err(|e| format!("preflight: {e}"))?;
+        let legacy_board_lock =
+            DeviceLock::acquire(&legacy_board_flock_name()).map_err(|e| format!("preflight: {e}"))?;
         let mut report = preflight(true);
         report.lock_mode = if labgrid_held {
             "labgrid place + flock"
@@ -151,7 +203,8 @@ impl RigGuard {
         Ok(RigGuard {
             labgrid_held,
             _acr_lock: acr_lock,
-            _atom_lock: atom_lock,
+            _port_lock: port_lock,
+            _legacy_board_lock: legacy_board_lock,
             report,
         })
     }

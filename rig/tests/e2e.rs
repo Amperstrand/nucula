@@ -28,7 +28,7 @@ fn atom_port() -> String {
 }
 
 fn mint_url() -> String {
-    std::env::var("MINT_URL").unwrap_or_else(|_| nucula_rig::rig::DEFAULT_RELAY_MINT.into())
+    nucula_rig::rig::relay_mint()
 }
 
 /// Rust serial-driver smoke: open the atom console and round-trip a
@@ -145,20 +145,82 @@ async fn console_relay_money_loop() {
     let out = atom.mint_add(&mint).expect("mint add");
     assert!(!out.contains("error"), "mint add failed: {out}");
 
-    let recv = atom.cmd(&format!("receive {token}")).expect("receive");
-    eprintln!("{recv}");
-    assert!(
-        recv.contains("swapping"),
-        "receive did not reach the swap: {recv}"
-    );
-    assert!(!recv.contains("warning"), "receive warned: {recv}");
+    fn sat_total(out: &str) -> Option<u64> {
+        if let Some(t) = out.lines().find(|l| l.trim_start().starts_with("total:")) {
+            return t.split_whitespace().find_map(|w| w.parse().ok());
+        }
+        // A clean wallet answers "no proofs" instead of a total line —
+        // that is an explicit zero, not a truncated read.
+        if out.contains("no proofs") {
+            return Some(0);
+        }
+        None
+    }
+    let before = {
+        // The first read after a fresh boot can be eaten by boot noise —
+        // retry, then fail loudly (an unknown starting balance would
+        // make every later comparison meaningless).
+        let mut parsed = None;
+        for _ in 0..4 {
+            if let Some(t) = sat_total(&atom.cmd("balance").expect("balance before")) {
+                parsed = Some(t);
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(750));
+        }
+        parsed.expect("balance before: neither a total nor 'no proofs' after retries")
+    };
 
-    let balance = atom.cmd("balance").expect("balance");
-    eprintln!("{balance}");
-    assert!(
-        balance.contains("1 sat"),
-        "balance missing the received sat: {balance}"
-    );
+    // The Hades2001 bridge drops chunks under dense lines (rig README);
+    // the device can complete a receive whose confirmation never crosses
+    // the wire, and a command can equally be eaten mid-line. The balance
+    // total is the authoritative signal: send, poll for the +1, resend a
+    // fresh token only if nothing landed. A resent spent token merely
+    // warns on-device, which is expected noise here.
+    let mut received = false;
+    let mut token = token;
+    for attempt in 0..3 {
+        if attempt > 0 {
+            // Re-establish the balance BEFORE minting again: a receive
+            // may have landed while every confirmation line was dropped.
+            // Minting blind can double-credit the wallet and let a
+            // 2-3 sat total mask the transport result.
+            let mut landed = false;
+            for _ in 0..4 {
+                let balance = atom.cmd("balance").expect("balance recheck");
+                match sat_total(&balance) {
+                    Some(a) if a > before => {
+                        landed = true;
+                        break;
+                    }
+                    Some(a) if a == before => break, // clean: nothing landed
+                    _ => std::thread::sleep(std::time::Duration::from_millis(750)),
+                }
+            }
+            if landed {
+                received = true;
+                break;
+            }
+            token = nucula_rig::payer::mint_token(&mint, 1).await.expect("re-mint");
+        }
+        let recv = atom.cmd(&format!("receive {token}")).expect("receive");
+        eprintln!("{recv}");
+        for _ in 0..4 {
+            let balance = atom.cmd("balance").expect("balance");
+            eprintln!("{balance}");
+            match sat_total(&balance) {
+                Some(a) if a > before => {
+                    received = true;
+                    break;
+                }
+                _ => std::thread::sleep(std::time::Duration::from_millis(750)),
+            }
+        }
+        if received {
+            break;
+        }
+    }
+    assert!(received, "receive never landed: balance total did not grow");
 }
 
 /// ACR-as-tag relay e2e: the payer mints 1 sat at the LAN mint, the
