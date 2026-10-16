@@ -157,7 +157,10 @@ bool proofs_from_blob(const char *data, size_t len, std::vector<Proof> &out)
     BinReader r{data, 0, len};
     r.n = 4;
     unsigned count = r.u32v();
-    if (count > 100000) return false;
+    // Bound by the blob's own size first: a corrupted count must not
+    // drive a giant reserve (the OOM-abort boot-loop class). The minimal
+    // NPB1 proof is ~20 bytes (empty strings, no dleq/witness).
+    if (count > (len - 8) / 20) return false;
     out.reserve(count);
     for (unsigned i = 0; i < count && !r.bad; i++) {
         Proof p;

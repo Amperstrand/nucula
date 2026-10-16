@@ -68,7 +68,7 @@ fn mint_host_port() -> Result<std::net::SocketAddr, String> {
     let (default_port, rest) = if let Some(r) = mint.strip_prefix("https://") {
         (443u16, r)
     } else if let Some(r) = mint.strip_prefix("http://") {
-        (3338u16, r)
+        (80u16, r)
     } else {
         return Err(format!("MINT_URL must start with http:// or https:// (got {mint})"));
     };
@@ -157,7 +157,11 @@ pub fn preflight(repair: bool) -> PreflightReport {
 pub struct RigGuard {
     labgrid_held: bool,
     _acr_lock: DeviceLock,
-    _atom_lock: DeviceLock,
+    _port_lock: DeviceLock,
+    /// Legacy board-named lock, held ALONGSIDE the port-derived one so a
+    /// rig of the previous generation overlapping this one still excludes
+    /// on the shared name (Codex P1: identity drift between versions).
+    _legacy_board_lock: DeviceLock,
     pub report: PreflightReport,
 }
 
@@ -173,14 +177,23 @@ fn board_flock_name() -> String {
     format!("port-{}", tail)
 }
 
+/// The pre-port-identity lock name (e.g. `atom-9d529068b4`), kept so
+/// overlapping rig generations still exclude each other.
+fn legacy_board_flock_name() -> String {
+    let board = super::detect_board();
+    format!("{}-{}", board.name(), board.lock_id())
+}
+
 impl RigGuard {
     pub fn acquire() -> Result<Self, String> {
         let labgrid_held = labgrid("acquire");
         // Locks: always. Machine-wide convention covers non-labgrid
         // users; labgrid covers cross-host users of the coordinator.
         let acr_lock = DeviceLock::acquire("acr1252").map_err(|e| format!("preflight: {e}"))?;
-        let atom_lock =
+        let port_lock =
             DeviceLock::acquire(&board_flock_name()).map_err(|e| format!("preflight: {e}"))?;
+        let legacy_board_lock =
+            DeviceLock::acquire(&legacy_board_flock_name()).map_err(|e| format!("preflight: {e}"))?;
         let mut report = preflight(true);
         report.lock_mode = if labgrid_held {
             "labgrid place + flock"
@@ -190,7 +203,8 @@ impl RigGuard {
         Ok(RigGuard {
             labgrid_held,
             _acr_lock: acr_lock,
-            _atom_lock: atom_lock,
+            _port_lock: port_lock,
+            _legacy_board_lock: legacy_board_lock,
             report,
         })
     }

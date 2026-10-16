@@ -49,11 +49,14 @@ async fn main() {
             let b = total_line.unwrap_or("?").trim();
             eprintln!("== after {i}x{amount} == {b}");
             if let (Some(prev), Some(now)) = (last_total, total) {
-                if now < prev {
-                    // The baseline is `last_ckpt` receives ago: credit
-                    // every receive since then before computing the loss.
-                    let expected = prev + (i - last_ckpt) * amount;
-                    eprintln!("   *** RESET BOUNDARY: total went {prev} -> {now} (expected ~{expected}, lost ~{} sats) ***", expected.saturating_sub(now));
+                // Expected total after every receive since the last
+                // checkpoint. A reset can hide behind three successful
+                // receives (now == prev) — compare against the EXPECTED
+                // value, not just the previous one (Codex P2).
+                let expected = prev + (i - last_ckpt) * amount;
+                if now != expected {
+                    eprintln!("   *** BOUNDARY EVENT: total {prev} -> {now}, expected {expected} (delta {} sats) ***",
+                        now as i64 - expected as i64);
                 }
             }
             // Keep the last VALID baseline: a truncated checkpoint must

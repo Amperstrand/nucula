@@ -85,6 +85,13 @@ extern "C" wallet_nvs_stat_t g_wallet_nvs_stat = {};
 
 bool Wallet::save_proofs()
 {
+    if (degraded_) {
+        ESP_LOGE(TAG, "save_proofs refused: wallet is DEGRADED (proof load was skipped — saving would overwrite persisted state)");
+        g_wallet_nvs_stat.save_fails++;
+        g_wallet_nvs_stat.last_save_ok = false;
+        g_wallet_nvs_stat.last_err = -3;
+        return false;
+    }
     // Fail-stop bound (PERSISTENCE-DESIGN discipline): refuse to run on
     // state that could never persist, loudly, instead of silently
     // degrading to a RAM-only wallet — the nucula#1 bug class.
@@ -356,8 +363,17 @@ bool Wallet::merge_keysets(const std::vector<Keyset>& fresh)
 
 bool Wallet::load_from_nvs()
 {
-    load_proofs();
+    bool proofs_ok = load_proofs();
     load_keysets_nvs();
+    // A skipped/failed proof load MUST degrade the wallet: proceeding
+    // writable against an empty in-memory set would OVERWRITE the
+    // persisted proofs on the next save — destroying the very state we
+    // could not afford to load (Codex P1). Fail-stop, loudly.
+    if (!proofs_ok) {
+        degraded_ = true;
+        ESP_LOGE(TAG, "[%d] proof load skipped/failed — wallet DEGRADED-READ-ONLY until reboot (persisted proofs protected)",
+                 nvs_slot_);
+    }
     return !keysets_.empty() || !proofs_.empty();
 }
 

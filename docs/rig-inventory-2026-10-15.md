@@ -1,5 +1,11 @@
 # Rig inventory & tonight's gap map — 2026-10-15
 
+> **Post-migration note:** §C's runnable commands still name the
+> pre-migration bench (.221 coordinator/mint) as DISCOVERED during this
+> audit; the rig itself was migrated to .208 in the same session — use
+> `MINT_URL=http://192.168.13.208:3338` and coordinator
+> `192.168.13.208:20408` (see rig/src/rig.rs).
+
 Read-only audit for the test-framework session. Sources: `AGENTS.md`,
 `rig/README.md`, `rig/src/*.rs`, `rig/tests/e2e.rs`, `rig/examples/*.rs`,
 `rig/labgrid/*`, `rig/scripts/*.py`, `main/commands_*.cpp`, `main/console.cpp`.

@@ -256,20 +256,23 @@ async fn main() {
         std::thread::sleep(Duration::from_secs(5));
 
         if soak.cycles % SNAPSHOT_EVERY == 0 {
-            if let (Ok(heap), Ok(tasks), Ok(wstat)) =
-                (console.cmd("heap"), console.cmd("tasks"), console.cmd("wstat"))
-            {
-                soak.event(
-                    "snapshot",
-                    &[
-                        ("heap", heap.trim().to_string()),
-                        ("tasks", tasks.trim().to_string()),
-                        // wstat: wallet-persistence witness (firmware
-                        // commands_system.cpp) — the NVS-decay signal, gap iv.
-                        ("wstat", wstat.trim().to_string()),
-                    ],
-                );
-            }
+            // Each telemetry command is independent: a flaky-bridge error
+            // on one must not discard the whole snapshot (Codex P2) —
+            // record the failure string for that field instead.
+            let field = |r: Result<String, String>| match r {
+                Ok(v) => v.trim().to_string(),
+                Err(e) => format!("<cmd failed: {e}>"),
+            };
+            soak.event(
+                "snapshot",
+                &[
+                    ("heap", field(console.cmd("heap"))),
+                    ("tasks", field(console.cmd("tasks"))),
+                    // wstat: wallet-persistence witness (firmware
+                    // commands_system.cpp) — the NVS-decay signal, gap iv.
+                    ("wstat", field(console.cmd("wstat"))),
+                ],
+            );
         }
 
         if soak.cycles % REBOOT_EVERY == 0 {
