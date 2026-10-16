@@ -90,9 +90,12 @@ bool Wallet::save_proofs()
     static constexpr size_t PROOFS_BLOB_MAX = 32 * 1024;
 
     size_t blob_len = 0;
-    char* blob = proofs_to_json_buf(proofs_, &blob_len);
+    // Binary NPB1 form (wallet_blob.cpp): ~half the JSON size, so the
+    // save allocation fits at proof counts where the JSON form
+    // structurally could not (issue #15). Heap buffer; caller frees.
+    char* blob = cashu::proofs_to_bin_buf(proofs_, &blob_len);
     if (!blob) {
-        ESP_LOGE(TAG, "save_proofs: serialization allocation failed (%d proofs) — wallet is RAM-ONLY until this clears",
+        ESP_LOGE(TAG, "save_proofs: binary serialization failed (%d proofs) — wallet is RAM-ONLY until this clears",
                  (int)proofs_.size());
         g_wallet_nvs_stat.save_fails++;
         g_wallet_nvs_stat.last_save_ok = false;
@@ -171,7 +174,12 @@ bool Wallet::load_proofs()
     }
 
     std::vector<Proof> loaded;
-    if (!proofs_from_json(blob.c_str(), loaded)) {
+    // Dispatch on the magic: NPB1 binary (current) or JSON (legacy —
+    // the first successful save migrates the wallet to binary).
+    bool parsed = cashu::blob_is_binary(blob.data(), blob.size())
+        ? cashu::proofs_from_blob(blob.data(), blob.size(), loaded)
+        : proofs_from_json(blob.c_str(), loaded);
+    if (!parsed) {
         g_wallet_nvs_stat.load_fails++;
         return false;
     }
