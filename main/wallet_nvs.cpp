@@ -3,6 +3,7 @@
 #include "esp_heap_caps.h"
 #include "wallet_wstat.h"
 #include "cashu_json.hpp"
+#include "wallet_blob.hpp"
 
 #include <algorithm>
 #include <cstdio>
