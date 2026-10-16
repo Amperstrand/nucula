@@ -259,7 +259,7 @@ async fn main() {
             // Each telemetry command is independent: a flaky-bridge error
             // on one must not discard the whole snapshot (Codex P2) —
             // record the failure string for that field instead.
-            let field = |r: Result<String, String>| match r {
+            let field = |r: Result<String, _>| match r {
                 Ok(v) => v.trim().to_string(),
                 Err(e) => format!("<cmd failed: {e}>"),
             };
