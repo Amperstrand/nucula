@@ -15,6 +15,7 @@
 #include "selftest.hpp"
 #include "unit.hpp"
 #include "wallet.hpp"
+#include "wallet_blob.hpp"
 
 // ---------------------------------------------------------------------------
 // Host fakes: flow methods that live in wallet_flows.cpp / wallet_keysets.cpp
@@ -101,6 +102,7 @@ int main()
     run("quote/mint-info json", cashu::cashu_json_run_tests());
     run("pure codec/math selftests", nucula_pure_selftests());
     run("wallet logic (fees/selection/units)", cashu::Wallet::run_tests());
+    run("persistence boundary (issue #15)", cashu::persistence_boundary_run_tests() == 0);
 
     secp256k1_context_destroy(ctx);
     printf("\n%s (%d suite(s) failed)\n", g_failed ? "FAILED" : "ALL PASS", g_failed);

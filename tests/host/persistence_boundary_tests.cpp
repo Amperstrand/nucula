@@ -1,0 +1,198 @@
+// Regression tests for issue #15: the ~714-sat persistence boundary.
+//
+// On target, 714 sat (~70 powers-of-two proofs with DLEQ) was exactly
+// where the legacy JSON serializer's growth policy demanded 64 KiB of
+// contiguous heap — more than the largest free block mid-receive — so
+// every save failed with the -1 sentinel and the wallet ran RAM-only.
+// The allocation wall itself is target-specific; what these host tests
+// pin down is everything around it:
+//   - NPB1 round-trips at the boundary balances (700/701/713/714/715/
+//     1000/1176 sat) with identical fields, including dleq/witness
+//   - the binary blob beats the legacy JSON blob in size (the diet
+//     that moved the wall) and stays under the 32 KiB fail-stop bound
+//   - a corrupted proof count is rejected by the blob's own size
+//     before any reserve (the OOM boot-loop class)
+//   - legacy JSON blobs still parse (the migration path — wallets
+//     self-migrate on the first successful save)
+
+#include "cashu_json.hpp"
+#include "wallet_blob.hpp"
+
+#include <cstdio>
+#include <cstring>
+#include <cstdlib>
+#include <string>
+#include <vector>
+
+namespace cashu {
+
+namespace {
+
+std::string hex_pad(unsigned seed, size_t hex_len)
+{
+    static const char *digits = "0123456789abcdef";
+    std::string out;
+    out.reserve(hex_len);
+    unsigned x = seed * 2654435761u + 12345u;
+    for (size_t i = 0; i < hex_len; i++) {
+        x = x * 1664525u + 1013904223u;
+        out += digits[(x >> 16) & 0xF];
+    }
+    return out;
+}
+
+// Proof set for a balance the way the bench boundary actually built
+// it: repeated small receives (42-sat chunks, each split into
+// powers-of-two denominations by the mint) accumulate until the
+// balance is reached — 714 sat = 17 x 42 = ~51 proofs, 1176 sat =
+// 28 x 42 = 84 proofs (the bench capture's proofs_loaded=84).
+std::vector<Proof> proofs_for_sats(int64_t sats)
+{
+    std::vector<Proof> proofs;
+    auto receive_chunk = [&](int64_t chunk) {
+        for (int denom = 1 << 16; denom > 0 && chunk > 0; denom >>= 1) {
+            while (chunk >= denom) {
+                Proof p;
+                p.id = hex_pad((unsigned)proofs.size() + 1, 32);
+                p.amount = denom;
+                p.secret = hex_pad((unsigned)proofs.size() + 2, 64);
+                p.C = hex_pad((unsigned)proofs.size() + 3, 66);
+                DLEQ d;
+                d.e = hex_pad((unsigned)proofs.size() + 4, 64);
+                d.s = hex_pad((unsigned)proofs.size() + 5, 64);
+                if (denom & 1) {
+                    // odd denominations carry the third DLEQ term on
+                    // this mint; even ones omit it — both round-trip
+                    d.r = hex_pad((unsigned)proofs.size() + 6, 64);
+                }
+                p.dleq = d;
+                proofs.push_back(std::move(p));
+                chunk -= denom;
+            }
+        }
+    };
+    while (sats >= 42) {
+        receive_chunk(42);
+        sats -= 42;
+    }
+    if (sats > 0)
+        receive_chunk(sats);
+    return proofs;
+}
+
+bool proofs_equal(const Proof &a, const Proof &b)
+{
+    if (a.id != b.id || a.amount != b.amount || a.secret != b.secret ||
+        a.C != b.C)
+        return false;
+    if (a.dleq.has_value() != b.dleq.has_value())
+        return false;
+    if (a.dleq) {
+        if (a.dleq->e != b.dleq->e || a.dleq->s != b.dleq->s)
+            return false;
+        if (a.dleq->r.has_value() != b.dleq->r.has_value())
+            return false;
+        if (a.dleq->r && *a.dleq->r != *b.dleq->r)
+            return false;
+    }
+    if (a.witness.has_value() != b.witness.has_value())
+        return false;
+    if (a.witness && *a.witness != *b.witness)
+        return false;
+    return true;
+}
+
+} // namespace
+
+int persistence_boundary_run_tests()
+{
+    static const int64_t balances[] = {700, 701, 713, 714, 715, 1000, 1176};
+    bool all_ok = true;
+    bool roundtrip_ok = true;
+    bool bound_ok = true;
+    bool diet_ok = true;
+
+    for (int64_t sats : balances) {
+        std::vector<Proof> proofs = proofs_for_sats(sats);
+
+        int64_t sum = 0;
+        for (const Proof &p : proofs) sum += p.amount;
+        if (sum != sats || proofs.empty()) {
+            roundtrip_ok = false;
+            continue;
+        }
+
+        size_t bin_len = 0;
+        char *bin = proofs_to_bin_buf(proofs, &bin_len);
+        if (!bin || !blob_is_binary(bin, bin_len)) {
+            roundtrip_ok = false;
+            free(bin);
+            continue;
+        }
+
+        // The fail-stop bound from wallet_nvs.cpp (PROOFS_BLOB_MAX):
+        // a save over 32 KiB is refused loudly rather than attempted.
+        if (bin_len > 32 * 1024) bound_ok = false;
+
+        size_t json_len = 0;
+        char *json = proofs_to_json_buf(proofs, &json_len);
+        if (json) {
+            if (json_len <= bin_len) diet_ok = false;
+        }
+        if (json && sats == 714) {
+            printf("  714-sat profile: %zu proofs, NPB1 %zu B, JSON %zu B\n",
+                   proofs.size(), bin_len, json_len);
+        }
+
+        std::vector<Proof> back;
+        if (!proofs_from_blob(bin, bin_len, back) ||
+            back.size() != proofs.size()) {
+            roundtrip_ok = false;
+            free(bin);
+            free(json);
+            continue;
+        }
+        for (size_t i = 0; i < proofs.size(); i++) {
+            if (!proofs_equal(proofs[i], back[i])) {
+                roundtrip_ok = false;
+                break;
+            }
+        }
+
+        // Legacy migration path: the JSON blob must still parse, and
+        // the loader's dispatch key must classify both forms.
+        if (json) {
+            std::vector<Proof> from_json;
+            bool json_ok = !blob_is_binary(json, json_len) &&
+                           proofs_from_json(json, from_json) &&
+                           from_json.size() == proofs.size();
+            if (!json_ok) roundtrip_ok = false;
+        }
+
+        // Corrupted count guard: a huge count in the header must be
+        // rejected by the blob's own size before any reserve.
+        if (sats == 714) {
+            std::vector<char> tampered(bin, bin + bin_len);
+            memset(tampered.data() + 4, 0x7F, 4);
+            std::vector<Proof> sink;
+            if (proofs_from_blob(tampered.data(), tampered.size(), sink))
+                all_ok = false;
+        }
+
+        free(bin);
+        free(json);
+    }
+
+    printf("[%s] persistence boundary: NPB1 round-trip 700..1176 sat\n",
+           roundtrip_ok ? "PASS" : "FAIL");
+    printf("[%s] persistence boundary: NPB1 under the 32 KiB fail-stop bound\n",
+           bound_ok ? "PASS" : "FAIL");
+    printf("[%s] persistence boundary: NPB1 smaller than legacy JSON\n",
+           diet_ok ? "PASS" : "FAIL");
+    printf("[%s] persistence boundary: corrupted count rejected pre-reserve\n",
+           all_ok ? "PASS" : "FAIL");
+
+    return (roundtrip_ok && bound_ok && diet_ok && all_ok) ? 0 : 1;
+}
+
+} // namespace cashu
