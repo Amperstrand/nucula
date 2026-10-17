@@ -31,3 +31,8 @@ tests/host/build/
 # Agent session state
 .omo/
 .opencode-recovery-backup*/
+
+# fuzzing: seeds are checked in; grown corpus + artifacts are local
+rig/fuzz/corpus/*/*
+!rig/fuzz/corpus/*/seed*
+rig/fuzz/artifacts/
