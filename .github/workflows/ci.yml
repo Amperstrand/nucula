@@ -1,0 +1,54 @@
+# Fork CI for Amperstrand/nucula: host test suites + per-target firmware
+# builds on every push. Gated to this fork so the same commits stay
+# inert if they ever land upstream — drop this commit before a PR there.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host-tests:
+    if: github.repository == 'Amperstrand/nucula'
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Host test dependencies
+        run: apt-get update && apt-get install -y --no-install-recommends libcjson-dev libsecp256k1-dev
+      - name: Fetch managed components
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py -B build-ci reconfigure
+      - name: Build and run host suites
+        run: |
+          . $IDF_PATH/export.sh
+          cmake -S tests/host -B tests/host/build -DMBEDTLS_DIR=$IDF_PATH/components/mbedtls/mbedtls
+          cmake --build tests/host/build -j"$(nproc)"
+          ./tests/host/build/nucula_host_tests
+          ./tests/host/build/nucula_nfc_tests
+
+  firmware:
+    if: github.repository == 'Amperstrand/nucula'
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.5.1
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [nucula-v2, atom, m5stick]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Copy wifi config placeholder
+        run: cp main/wifi_config.example.h main/wifi_config.h
+      - name: Build ${{ matrix.target }}
+        run: |
+          . $IDF_PATH/export.sh
+          case ${{ matrix.target }} in
+            nucula-v2) idf.py -B build -DSDKCONFIG=build/sdkconfig build ;;
+            atom)      idf.py -B build -DSDKCONFIG=build/sdkconfig -DIDF_TARGET=esp32 \
+                         -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.atom" build ;;
+            m5stick)   idf.py -B build -DSDKCONFIG=build/sdkconfig -DIDF_TARGET=esp32 \
+                         -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.defaults.m5stick" build ;;
+          esac
