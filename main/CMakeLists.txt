@@ -6,7 +6,7 @@ set(NUCULA_SRCS "nucula.cpp" "commands_common.cpp" "commands_wallet.cpp" "comman
                 "selftest.cpp" "wallet_selftest.cpp"
                 "console.cpp" "display.cpp" "display_text.cpp" "font5x7.c" "ndef.cpp" "keypad.c" "i2c_bus.c" "axp192.c"
                 "nfc_common.cpp" "bip39.c" "nut10.cpp" "base64url.cpp" "wallet_store.cpp" "ui.cpp"
-                "unit.cpp" "display_st7789.c")
+                "unit.cpp" "display_st7789.c" "button.c")
 
 idf_component_register(SRCS ${NUCULA_SRCS} "nfc.cpp" "nfc_reader.cpp"
                     INCLUDE_DIRS "."

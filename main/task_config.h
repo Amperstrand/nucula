@@ -23,5 +23,9 @@
 #define NUCULA_TASK_STACK_WIFI_SUP   4096
 #define NUCULA_TASK_PRIO_WIFI_SUP    3
 
+// M5Stick button poll: debounce state + a ui_refresh call
+#define NUCULA_TASK_STACK_BUTTON     3072
+#define NUCULA_TASK_PRIO_BUTTON      3
+
 #define NUCULA_TASK_STACK_HTTP_WARM  8192
 #define NUCULA_TASK_PRIO_HTTP_WARM   3

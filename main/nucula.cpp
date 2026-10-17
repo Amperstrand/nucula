@@ -17,6 +17,7 @@
 #include "selftest.hpp"
 #include "display.h"
 #include "display_st7789.h"
+#include "button.h"
 #include "i2c_bus.h"
 #include "axp192.h"
 #include "nfc.hpp"
@@ -36,6 +37,26 @@
 // another edge. So once connected we retry with an exponential backoff
 // until everything is redeemed (or the link drops), then re-arm on the
 // next reconnect.
+// Two-button UI for the M5Stick while it stays keypad-less: the front
+// button refreshes the home screen; the side button toggles the
+// backlight (also the bring-up probe for the blanking anomaly).
+#if CONFIG_NUCULA_BOARD_M5STICK
+static void m5stick_button_task(void *)
+{
+    bool lit = true;
+    for (;;) {
+        button_id_t b = button_poll();
+        if (b == BTN_A) {
+            ui_refresh();
+        } else if (b == BTN_B) {
+            lit = !lit;
+            display_st7789_backlight(lit);
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+}
+#endif
+
 static void wifi_drain_task(void *)
 {
     EventGroupHandle_t eg = wifi_get_event_group();
@@ -194,6 +215,10 @@ extern "C" void app_main(void)
         display_st7789_backlight(true);
     } else {
         ESP_LOGW(TAG, "ST7789 init failed, display disabled");
+    }
+    if (button_init()) {
+        xTaskCreate(m5stick_button_task, "m5_btn", NUCULA_TASK_STACK_BUTTON,
+                    NULL, NUCULA_TASK_PRIO_BUTTON, NULL);
     }
 #else
     display_init(i2c_bus_get());

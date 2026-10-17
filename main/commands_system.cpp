@@ -14,6 +14,7 @@
 #include "keypad.h"
 #include "display.h"
 #include "display_st7789.h"
+#include "button.h"
 #include "ui.h"
 
 #include <cstdio>
@@ -471,6 +472,26 @@ static void cmd_display(const char *arg)
         console_print("usage: display <on|off|fill [rgb565-hex]|variant>\r\n");
     }
 }
+
+static void cmd_button(const char *arg)
+{
+    (void)arg;
+    console_print("press a button (5s window)...\r\n");
+    int64_t deadline = esp_timer_get_time() + 5LL * 1000000;
+    while (esp_timer_get_time() < deadline) {
+        button_id_t b = button_poll();
+        if (b == BTN_A) {
+            console_print("button: A (front, G37)\r\n");
+            return;
+        }
+        if (b == BTN_B) {
+            console_print("button: B (side, G39)\r\n");
+            return;
+        }
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+    console_print("button: none pressed\r\n");
+}
 #endif
 
 void commands_system_register(void)
@@ -487,6 +508,7 @@ void commands_system_register(void)
 #endif
 #if CONFIG_NUCULA_BOARD_M5STICK
     console_register_cmd("display", cmd_display, "display <on|off|fill [rgb565]|variant>");
+    console_register_cmd("button",  cmd_button,  "button — report a press within 5s");
 #endif
     console_register_cmd("reboot",  cmd_reboot,   "restart the device");
     console_register_cmd("heap",    cmd_heap,     "show heap usage");
