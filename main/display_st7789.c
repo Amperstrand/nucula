@@ -14,6 +14,7 @@
 
 #include "board.h"
 #include "axp192.h"
+#include "display.h"
 
 #include "esp_err.h"
 #include "esp_log.h"
@@ -219,6 +220,71 @@ void display_st7789_backlight(bool on)
         backlight_gpio(on);
     else
         axp192_backlight(on);
+}
+
+// -------------------------------------------------------------------------
+// Monochrome display.h backend: a 1bpp linear canvas that blits to the
+// panel as RGB565 scanlines on display_update(). White = lit pixel.
+// -------------------------------------------------------------------------
+
+#define MONO_BYTES (((LCD_H * LCD_W) + 7) / 8)
+
+static uint8_t s_mono[MONO_BYTES];
+static uint8_t s_line[LCD_MAX_XFER];
+
+static inline bool mono_get(int x, int y)
+{
+    size_t bit = (size_t)y * LCD_W + x;
+    return (s_mono[bit / 8] >> (bit % 8)) & 1;
+}
+
+static inline void mono_set(int x, int y, bool on)
+{
+    size_t bit = (size_t)y * LCD_W + x;
+    if (on)
+        s_mono[bit / 8] |= (uint8_t)(1 << (bit % 8));
+    else
+        s_mono[bit / 8] &= (uint8_t)~(1 << (bit % 8));
+}
+
+void display_clear(void)
+{
+    memset(s_mono, 0, sizeof(s_mono));
+}
+
+void display_pixel(int x, int y, bool on)
+{
+    if (x < 0 || y < 0 || x >= LCD_W || y >= LCD_H)
+        return;
+    mono_set(x, y, on);
+}
+
+void display_fill_rect(int x, int y, int w, int h, uint16_t color)
+{
+    bool on = (color != COLOR_BLACK);
+    for (int r = y; r < y + h; r++)
+        for (int c = x; c < x + w; c++)
+            display_pixel(c, r, on);
+}
+
+void display_hline(int x, int y, int w)
+{
+    display_fill_rect(x, y, w, 1, COLOR_WHITE);
+}
+
+void display_update(void)
+{
+    if (!s_panel)
+        return;
+
+    for (int y = 0; y < LCD_H; y++) {
+        for (int x = 0; x < LCD_W; x++) {
+            s_line[2 * x]     = mono_get(x, y) ? 0xFF : 0x00;
+            s_line[2 * x + 1] = mono_get(x, y) ? 0xFF : 0x00;
+        }
+        if (!draw_sync(0, y, LCD_W, y + 1, s_line))
+            return;
+    }
 }
 
 #endif // CONFIG_NUCULA_BOARD_M5STICK

@@ -4,7 +4,7 @@ set(NUCULA_SRCS "nucula.cpp" "commands_common.cpp" "commands_wallet.cpp" "comman
                 "wallet.cpp" "wallet_nvs.cpp" "wallet_identity.cpp"
                 "wallet_keysets.cpp" "wallet_blind.cpp" "wallet_flows.cpp"
                 "selftest.cpp" "wallet_selftest.cpp"
-                "console.cpp" "display.cpp" "ndef.cpp" "keypad.c" "i2c_bus.c" "axp192.c"
+                "console.cpp" "display.cpp" "display_text.cpp" "font5x7.c" "ndef.cpp" "keypad.c" "i2c_bus.c" "axp192.c"
                 "nfc_common.cpp" "bip39.c" "nut10.cpp" "base64url.cpp" "wallet_store.cpp" "ui.cpp"
                 "unit.cpp" "display_st7789.c")
 

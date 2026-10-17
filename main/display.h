@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sdkconfig.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include "driver/i2c_master.h"
@@ -8,8 +9,14 @@
 extern "C" {
 #endif
 
+#if CONFIG_NUCULA_BOARD_M5STICK
+#include "board.h"
+#define LCD_W BOARD_LCD_WIDTH
+#define LCD_H BOARD_LCD_HEIGHT
+#else
 #define LCD_W 128
 #define LCD_H 64
+#endif
 
 // Monochrome: non-zero = pixel on, zero = pixel off.
 #define COLOR_BLACK  0x0000

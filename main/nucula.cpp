@@ -189,14 +189,14 @@ extern "C" void app_main(void)
     if (i2c_bus_init() != ESP_OK)
         ESP_LOGW(TAG, "I2C bus init failed; display/keypad/NFC disabled");
 
-    display_init(i2c_bus_get());
-
 #if CONFIG_NUCULA_BOARD_M5STICK
     if (display_st7789_init() == ESP_OK) {
         display_st7789_backlight(true);
     } else {
         ESP_LOGW(TAG, "ST7789 init failed, display disabled");
     }
+#else
+    display_init(i2c_bus_get());
 #endif
 
     if (keypad_init(i2c_bus_get()) == ESP_OK) {

@@ -30,3 +30,7 @@ main/wifi_config.h
 .local-backups/
 __pycache__/
 *.pyc
+
+# Agent session state
+.omo/
+.opencode-recovery-backup*/
