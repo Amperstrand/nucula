@@ -129,8 +129,13 @@ Preconditions:
 
 1. **Mint up on its LAN bind** — `/tmp/opencode/rig/start-mint.sh`
    (adapter `0.0.0.0:3338`, FakeWallet, shared-cargo-cache paths).
-   The token embeds `http://192.168.13.221:3338`; the atom must be on
-   the same LAN (it joins the lab AP automatically).
+   The token embeds the resolved mint URL (`http://192.168.13.208:3338`
+   today); the atom must be on the same LAN (it joins the lab AP
+   automatically). The mint address is resolved, not compiled: env
+   `MINT_URL` > `mint=<url>` token in the `nucula-rig` labgrid place
+   comment (the registry — a bench migration is a comment edit, e.g.
+   `labgrid-client -p nucula-rig comment "mint=http://<new>:3338"`) >
+   compiled fallback. Preflight prints the source it used.
 2. **A writable blank boltcard on the atom's antenna**, within reach
    of the ACR's antenna too (sandwiched; the write goes through the
    ACR's field while the atom's stays off — the firmware gates the
@@ -150,8 +155,10 @@ the stash-then-drain path instead.
 The rig devices are shared across Amperstrand projects (bolty HIL uses
 this ACR1252; the microfips bench registered the atoms). Coordination:
 
-- **Primary: the shared labgrid coordinator** (`192.168.13.221:20408`,
-  running as `labgrid-coordinator.service`). The `nucula-rig` place
+- **Primary: the shared labgrid coordinator** (ai-legion
+  `192.168.13.208:20408`, running as `labgrid-coordinator.service`;
+  resolved via env `LABGRID_COORDINATOR` > compiled fallback — see
+  `rig/src/endpoints.rs`). The `nucula-rig` place
   (`labgrid/nucula-place.sh`, idempotent) matches resources that
   already exist — `ai-legion-small-microfips/atom-b-serial` (the atom
   token) and `ai-legion-small/acr1252` (bolty's ACR token) — so

@@ -11,7 +11,10 @@ use std::time::Duration;
 use nucula_rig::atom_console::AtomConsole;
 
 fn env_or(name: &str, default: u64) -> u64 {
-    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+    std::env::var(name)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
 }
 
 #[tokio::main]
@@ -27,7 +30,9 @@ async fn main() {
     let mut last_total: Option<u64> = None;
     let mut last_ckpt: u64 = 0;
     for i in 1..=count {
-        let token = nucula_rig::payer::mint_token(&mint, amount).await.expect("mint");
+        let token = nucula_rig::payer::mint_token(&mint, amount)
+            .await
+            .expect("mint");
         for attempt in 0..3 {
             if let Ok(out) = c.cmd(&format!("receive {token}")) {
                 if out.contains("received") {
@@ -43,9 +48,8 @@ async fn main() {
             let bal = c.cmd("balance").unwrap_or_default();
             let ws = c.cmd("wstat").unwrap_or_default();
             let total_line = bal.lines().find(|l| l.contains("total:"));
-            let total: Option<u64> = total_line.and_then(|l| {
-                l.split_whitespace().find_map(|w| w.parse().ok())
-            });
+            let total: Option<u64> =
+                total_line.and_then(|l| l.split_whitespace().find_map(|w| w.parse().ok()));
             let b = total_line.unwrap_or("?").trim();
             eprintln!("== after {i}x{amount} == {b}");
             if let (Some(prev), Some(now)) = (last_total, total) {
@@ -65,7 +69,10 @@ async fn main() {
                 last_total = total;
                 last_ckpt = i;
             }
-            for l in ws.lines().filter(|l| l.contains("saves=") || l.contains("nvs entries")) {
+            for l in ws
+                .lines()
+                .filter(|l| l.contains("saves=") || l.contains("nvs entries"))
+            {
                 eprintln!("   {}", l.trim());
             }
         }
@@ -76,7 +83,10 @@ async fn main() {
     for l in bal.lines().filter(|l| l.contains("total:")) {
         eprintln!("{}", l.trim());
     }
-    for l in ws.lines().filter(|l| l.contains("saves=") || l.contains("nvs entries")) {
+    for l in ws
+        .lines()
+        .filter(|l| l.contains("saves=") || l.contains("nvs entries"))
+    {
         eprintln!("{}", l.trim());
     }
 }

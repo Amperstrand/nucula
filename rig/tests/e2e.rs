@@ -201,7 +201,9 @@ async fn console_relay_money_loop() {
                 received = true;
                 break;
             }
-            token = nucula_rig::payer::mint_token(&mint, 1).await.expect("re-mint");
+            token = nucula_rig::payer::mint_token(&mint, 1)
+                .await
+                .expect("re-mint");
         }
         let recv = atom.cmd(&format!("receive {token}")).expect("receive");
         eprintln!("{recv}");

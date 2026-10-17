@@ -19,17 +19,24 @@ use crate::acr::Acr1252;
 use crate::atom_console::AtomConsole;
 use crate::locks::DeviceLock;
 
-pub const LABGRID_COORDINATOR: &str = "192.168.13.208:20408";
 pub const LABGRID_PLACE: &str = "nucula-rig";
-pub const LABGRID_CLIENT: &str = "/usr/local/bin/labgrid-client";
-/// The mint's LAN bind — the atom must reach the URL embedded in its
-/// tokens; preflight checks reachability.
-pub const DEFAULT_RELAY_MINT: &str = "http://192.168.13.208:3338";
 
-/// The relay mint URL: `MINT_URL` overrides the bench default (same
-/// convention as the payer tests — see payer.rs `mint_base`).
+// Bench endpoints (coordinator + mint) are resolved, not compiled:
+// env override > live labgrid place comment (the registry — issue #14,
+// ADR-0005) > compiled fallbacks. See [`crate::endpoints`].
+use crate::endpoints::{self, BenchEndpoints, Source, FALLBACK_MINT};
+
+/// The relay mint URL, resolved end-to-end (env `MINT_URL` still wins,
+/// so payer tests and examples keep their existing override semantics).
 pub fn relay_mint() -> String {
-    std::env::var("MINT_URL").unwrap_or_else(|_| DEFAULT_RELAY_MINT.into())
+    resolve_endpoints().mint
+}
+
+/// Resolve coordinator + mint against the live registry (read-only).
+pub fn resolve_endpoints() -> BenchEndpoints {
+    let probe = endpoints::resolve_with_env(None, None, None); // bootstrap coordinator
+    let comment = endpoints::place_comment(&probe.coordinator, LABGRID_PLACE);
+    endpoints::resolve(comment.as_deref())
 }
 
 #[derive(Default)]
@@ -40,6 +47,10 @@ pub struct PreflightReport {
     pub atom: String,
     pub atom_repaired: Option<&'static str>,
     pub mint: String,
+    /// Where each endpoint came from (issue #14: preflight reports it).
+    pub coordinator: String,
+    pub mint_source: &'static str,
+    pub coordinator_source: &'static str,
 }
 
 impl fmt::Display for PreflightReport {
@@ -47,16 +58,32 @@ impl fmt::Display for PreflightReport {
         writeln!(f, "lock: {}", self.lock_mode)?;
         writeln!(f, "acr:  {} {:?}", self.acr, self.acr_repaired)?;
         writeln!(f, "atom: {} {:?}", self.atom, self.atom_repaired)?;
-        write!(f, "mint: {}", self.mint)
+        write!(f, "mint: {} [{}]", self.mint, self.mint_source)?;
+        write!(
+            f,
+            "
+coordinator: {} [{}]",
+            self.coordinator, self.coordinator_source
+        )
     }
 }
 
 fn labgrid(action: &str) -> bool {
-    Command::new(LABGRID_CLIENT)
-        .args(["-x", LABGRID_COORDINATOR, "-p", LABGRID_PLACE, action])
+    Command::new(endpoints::LABGRID_CLIENT)
+        .args([
+            "-x",
+            &resolve_endpoints().coordinator,
+            "-p",
+            LABGRID_PLACE,
+            action,
+        ])
         .status()
         .map(|s| s.success())
         .unwrap_or(false)
+}
+
+fn source_str(s: Source) -> &'static str {
+    s.as_str()
 }
 
 fn mint_host_port() -> Result<std::net::SocketAddr, String> {
@@ -70,7 +97,9 @@ fn mint_host_port() -> Result<std::net::SocketAddr, String> {
     } else if let Some(r) = mint.strip_prefix("http://") {
         (80u16, r)
     } else {
-        return Err(format!("MINT_URL must start with http:// or https:// (got {mint})"));
+        return Err(format!(
+            "MINT_URL must start with http:// or https:// (got {mint})"
+        ));
     };
     let authority = rest.split('/').next().unwrap_or(rest);
     let (host, port) = match authority.rsplit_once(':') {
@@ -93,6 +122,10 @@ fn mint_host_port() -> Result<std::net::SocketAddr, String> {
 /// rig/README); settings commands only.
 pub fn preflight(repair: bool) -> PreflightReport {
     let mut r = PreflightReport::default();
+    let eps = resolve_endpoints();
+    r.coordinator = eps.coordinator.clone();
+    r.coordinator_source = source_str(eps.coordinator_source);
+    r.mint_source = source_str(eps.mint_source);
 
     // ACR: presence + polling state; restore polling if a crashed run
     // left it quieted (NVM persists across replugs).
@@ -192,8 +225,8 @@ impl RigGuard {
         let acr_lock = DeviceLock::acquire("acr1252").map_err(|e| format!("preflight: {e}"))?;
         let port_lock =
             DeviceLock::acquire(&board_flock_name()).map_err(|e| format!("preflight: {e}"))?;
-        let legacy_board_lock =
-            DeviceLock::acquire(&legacy_board_flock_name()).map_err(|e| format!("preflight: {e}"))?;
+        let legacy_board_lock = DeviceLock::acquire(&legacy_board_flock_name())
+            .map_err(|e| format!("preflight: {e}"))?;
         let mut report = preflight(true);
         report.lock_mode = if labgrid_held {
             "labgrid place + flock"

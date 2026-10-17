@@ -8,6 +8,7 @@
 //! - e2e tests (`tests/`, `live` feature): drive the ACR and the atom
 //!   console over serial through a full over-the-air token receive.
 
+pub mod endpoints;
 pub mod locks;
 pub mod ndef_t2t;
 
