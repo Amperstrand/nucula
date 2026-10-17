@@ -27,3 +27,7 @@ sdkconfig.m5stick
 build-m5stick/
 rig/target/
 tests/host/build/
+
+# Agent session state
+.omo/
+.opencode-recovery-backup*/

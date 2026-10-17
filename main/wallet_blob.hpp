@@ -25,4 +25,8 @@ char *proofs_to_bin_buf(const std::vector<Proof> &proofs, size_t *len);
 // (caller falls back to / errors out — never a partial parse).
 bool proofs_from_blob(const char *data, size_t len, std::vector<Proof> &out);
 
+// Host-only regression suite for the issue #15 persistence boundary
+// (tests/host/persistence_boundary_tests.cpp).
+int persistence_boundary_run_tests();
+
 } // namespace cashu
