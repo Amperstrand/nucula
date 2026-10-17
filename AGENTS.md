@@ -102,9 +102,13 @@ own hardware state.
 
 Rules for code and agents in this repo:
 
-1. **Never hardcode device IPs, MACs, or serial-port paths.** Resolve from the
-   registry: `CONWRT_LAB=<conwrt-lab checkout>` +
-   `python3 $CONWRT_BENCH/scripts/lab_registry.py …`, or from a labgrid place.
+1. **Never hardcode device IPs, MACs, or serial-port paths.** Resolve from
+   the bench's single source of truth (conwrt-bench ADR-0005 — the
+   `CONWRT_LAB` env / lab_registry.py indirection is retired): the
+   conwrt-bench registry + labgrid places. This repo's rig endpoints
+   (coordinator + mint) resolve per `rig/src/endpoints.rs`: env override >
+   live `nucula-rig` place comment > compiled fallback, source reported by
+   preflight.
 2. **Access hardware through labgrid places** (coordinator `ai-legion:20408`):
    `labgrid-client -p <place> ssh|console|power`. Acquire/release for
    exclusivity during tests.
