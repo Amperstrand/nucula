@@ -120,3 +120,8 @@ Rules for code and agents in this repo:
 
 Env: `CONWRT_LAB` (this registry checkout) and `CONWRT_BENCH` (conwrt-bench
 checkout) are the two paths every hardware-touching tool understands.
+The rig harness resolves its coordinator + mint endpoints through
+`$CONWRT_BENCH/scripts/lab_registry.py endpoint <role>` (issue #14),
+with `LABGRID_COORDINATOR`/`MINT_URL` as direct overrides and the
+compiled constants as loudly-labelled fallbacks only — never edit the
+constants for a bench migration.
