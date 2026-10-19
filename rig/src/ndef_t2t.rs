@@ -132,7 +132,12 @@ fn parse_text_record(msg: &[u8]) -> Option<String> {
         return None;
     }
     let payload = msg.get(hdr..hdr + plen)?;
-    let lang_len = (payload[0] & 0x3F) as usize;
+    // An empty payload passes the range check above (a zero-length range
+    // is valid) but carries no status byte — reject before indexing, the
+    // same guard the device-side parser has had all along (ndef.cpp
+    // `payload_length < 1`). Found by fuzzing (crash input: plen=0).
+    let status = *payload.first()?;
+    let lang_len = (status & 0x3F) as usize;
     let text = payload.get(1 + lang_len..)?;
     Some(String::from_utf8_lossy(text).into_owned())
 }
@@ -239,5 +244,23 @@ mod tests {
     #[test]
     fn rejects_non_ndef_images() {
         assert_eq!(parse_ndef_text(&[0x00; 16]), None);
+    }
+}
+
+#[cfg(test)]
+mod fuzz_regressions {
+    use super::*;
+
+    // Regression for the empty-payload panic found by fuzz_parse_ndef_text
+    // (first soak, 2026-10-17): a D1/01 record with plen=0 slips through
+    // the zero-length range check and panicked indexing payload[0].
+    #[test]
+    fn text_record_with_empty_payload_is_rejected_not_panicked() {
+        assert_eq!(parse_text_record(&[0xD1, 0x01, 0x00, 0x54]), None);
+        // and the long form too
+        assert_eq!(
+            parse_text_record(&[0x51, 0x01, 0, 0, 0, 0, 0x54]),
+            None
+        );
     }
 }
