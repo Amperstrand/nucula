@@ -1,0 +1,83 @@
+# Nightly bounded fuzz runs for the rig's NDEF T2T parser harness
+# (PR #23): raw tag images into parse_ndef_text, hostile text into
+# extract_cashu_token. Seeds live in-tree under rig/fuzz/corpus/;
+# the nightly's grown corpus is uploaded as an artifact for the
+# manual corpus-growth loop. Bounded by -max_total_time so a nightly
+# costs minutes, not hours; crash artifacts upload on failure.
+#
+# Trigger manually any time with workflow_dispatch.
+
+name: Fuzz Nightly
+
+on:
+  schedule:
+    - cron: "23 3 * * *" # 03:23 UTC — off the hour to miss cron rushes
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    name: rig/fuzz ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    # nucula has no root rust-toolchain.toml today; this env is
+    # future-proofing against one appearing (the micronuts #110/#117
+    # failure class: a root toml pin shadows cargo-fuzz's -Zsanitizer
+    # inside */fuzz dirs).
+    env:
+      RUSTUP_TOOLCHAIN: nightly
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [fuzz_parse_ndef_text, fuzz_extract_cashu_token]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+
+      - name: Install cargo-fuzz
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-fuzz
+
+      - name: Fuzz (bounded 120s)
+        working-directory: rig/fuzz
+        run: |
+          set +e
+          # --target gnu: cargo-fuzz's musl default is ASan-incompatible
+          # (statically linked libc) and not preinstalled on the runner.
+          cargo fuzz run --target x86_64-unknown-linux-gnu ${{ matrix.target }} -- -max_total_time=120 -timeout=10
+          rc=$?
+          if [ $rc -ne 0 ]; then
+            echo "::group::fuzz artifacts"
+            ls -la artifacts/ crash-* timeout-* leak-* oom-* 2>/dev/null || true
+            echo "::endgroup::"
+          fi
+          exit $rc
+
+      - name: Upload crash artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-${{ matrix.target }}-artifacts
+          path: |
+            rig/fuzz/artifacts/
+            rig/fuzz/crash-*
+            rig/fuzz/timeout-*
+            rig/fuzz/leak-*
+            rig/fuzz/oom-*
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Upload grown corpus
+        # Always upload — the corpus growth step of the fuzz loop is
+        # manual today; the nightly's evolved corpus is the input for
+        # that (same convention as Amperstrand/micronuts).
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-${{ matrix.target }}-corpus
+          path: rig/fuzz/corpus/${{ matrix.target }}/
+          if-no-files-found: ignore
+          retention-days: 14

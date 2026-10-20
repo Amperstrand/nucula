@@ -1,0 +1,31 @@
+# Host-side CI for the rig crate (pure-logic unit + integration tests;
+# the `live`/`payer` features need bench hardware and stay manual).
+# The firmware itself builds through the ESP-IDF toolchain in the
+# project sandbox — not CI-able here yet.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rig-tests:
+    name: cargo test (rig)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rig
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.99.0
+
+      - name: cargo test
+        run: cargo test
