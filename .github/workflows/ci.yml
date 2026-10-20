@@ -27,5 +27,21 @@ jobs:
         with:
           toolchain: 1.99.0
 
+      # The rig's optional payer deps are PATH deps onto a bench-local
+      # cdk checkout (/home/ubuntu/src/cdk — symlinked on the bench to
+      # the fleet's pinned fork). Cargo resolves path deps even when
+      # their feature is off, so the manifests must merely EXIST here;
+      # they are never compiled (`payer` is not enabled for CI tests).
+      # Proper fix (vendored/relative path or git dep) is future work;
+      # stub versions match the lockfile (cdk 0.18.1, cdk-sqlite 0.18.1).
+      - name: Stub the bench-local cdk path deps (resolver-only)
+        run: |
+          sudo mkdir -p /home/ubuntu/src/cdk/crates/cdk/src /home/ubuntu/src/cdk/crates/cdk-sqlite/src
+          printf '[package]\nname = "cdk"\nversion = "0.18.1"\nedition = "2021"\n' \
+            | sudo tee /home/ubuntu/src/cdk/crates/cdk/Cargo.toml >/dev/null
+          printf '[package]\nname = "cdk-sqlite"\nversion = "0.18.1"\nedition = "2021"\n' \
+            | sudo tee /home/ubuntu/src/cdk/crates/cdk-sqlite/Cargo.toml >/dev/null
+          sudo touch /home/ubuntu/src/cdk/crates/cdk/src/lib.rs /home/ubuntu/src/cdk/crates/cdk-sqlite/src/lib.rs
+
       - name: cargo test
         run: cargo test
