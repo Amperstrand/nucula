@@ -135,8 +135,8 @@ def phone(request, phone_place, evidence_dir) -> Phone:
 
 @pytest.fixture(scope="module")
 def token_link(request, tmp_path_factory) -> TokenLinkServer:
-    srv = TokenLinkServer(tmp_path_factory.mktemp("tokenserve"))
     try:
+        srv = TokenLinkServer(tmp_path_factory.mktemp("tokenserve"))
         srv.start()
     except OSError as e:
         pytest.skip(
