@@ -68,7 +68,9 @@ def _stage_phone_hce_send(phone) -> bool:
     """Drive cashu.me into the NFC-send state (Send → … NFC …).
 
     App UI drifts; this is deliberately a best-effort stager: if the
-    flow is not findable in the dump, we skip with what we saw. """
+    flow is not findable in the dump, we skip with what we saw. An
+    empty dump means the phone UI is being driven by another session
+    (concurrent uiautomator = rc=137) — a contention skip. """
     phone.launch_cashu()
     if not phone.tap_text("Send", settle=3.0):
         return False
@@ -85,6 +87,9 @@ def test_acr_reads_phone_hce_token(acr_place, phone, evidence_dir):
 
     staged = _stage_phone_hce_send(phone)
     texts = phone.screen_texts()
+    if not texts:
+        pytest.skip("phone UI unavailable (uiautomator contended by "
+                    "another driving session) — shared-phone skip")
     phone.save_dump("t3_phone_send_staged")
     if not staged:
         pytest.skip(
