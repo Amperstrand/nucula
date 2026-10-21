@@ -1,0 +1,73 @@
+# Phone-vs-device HIL on the ai-legion bench (design: docs/HIL-PHONE-DESIGN.md)
+#
+# SECURITY (root runner — read before editing triggers):
+#   workflow_dispatch + schedule ONLY. NEVER add pull_request /
+#   pull_request_target: fork PR code would execute on the bench host
+#   as root (ccid-firmware-rs #183 doctrine, same runner).
+#
+# Hardware: [self-hosted, bench] runner on ai-legion (.208), labgrid
+# coordinator 127.0.0.1:20408 from there. Suites acquire places per
+# module and skip loudly when the bench is busy serving other lanes.
+
+name: hil-phone
+
+on:
+  workflow_dispatch:
+    inputs:
+      mint_url:
+        description: 'mint the rig pays from (fake-sat)'
+        required: false
+        default: 'https://testnut.cashu.space'
+  schedule:
+    - cron: '23 3 * * *'   # nightly opt-in; comment out to disarm
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+  # The phone's adb transport belongs to the host adb server (user root,
+  # 127.0.0.1:5037); the runner user's client shares it via this socket.
+  ADB_SERVER_SOCKET: 'tcp:127.0.0.1:5037'
+
+jobs:
+  hil:
+    runs-on: [self-hosted, bench]
+    name: phone-vs-device HIL suites
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with: { submodules: 'false' }
+
+      - name: bench inventory (coordinator view)
+        run: |
+          set +e
+          labgrid-client -x ai-legion:20408 places > hil-places.txt 2>&1
+          echo "rc=$?" >> hil-places.txt
+          cat hil-places.txt
+          exit 0
+
+      - name: run HIL suites
+        run: >
+          python3 -m pytest tests/hil/phone/ -v --hil
+          --mint-url "${{ inputs.mint_url || 'https://testnut.cashu.space' }}"
+          --timeout=600 --timeout-method=signal
+          --junitxml=hil-junit.xml
+
+      - name: junit artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: hil-junit, path: hil-junit.xml }
+
+      - name: evidence artifacts (console transcripts, UI dumps)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hil-evidence
+          path: hil-results/
+          if-no-files-found: ignore
+
+      - name: bench inventory artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: hil-places, path: hil-places.txt, if-no-files-found: ignore }

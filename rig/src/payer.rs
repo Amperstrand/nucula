@@ -68,22 +68,47 @@ pub async fn mint_token(mint_url: &str, amount_sats: u64) -> Result<String, Paye
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use cdk::nuts::CurrencyUnit;
+    use cdk::wallet::Wallet;
+    use std::sync::Arc;
+
     fn mint_base() -> String {
         std::env::var("MINT_URL").unwrap_or_else(|_| "http://127.0.0.1:3338".into())
     }
 
     #[cfg(feature = "payer")]
     #[tokio::test]
+    #[ignore = "needs a token (TOKEN env) + its mint (MINT_URL)"]
+    async fn receives_a_token_back_from_the_mint() {
+        let token = std::env::var("TOKEN").expect("TOKEN env");
+        let localstore = Arc::new(cdk_sqlite::wallet::memory::empty().await.unwrap());
+        let seed: [u8; 64] = rand::random();
+        let wallet = Wallet::new(&mint_base(), CurrencyUnit::Sat, localstore, seed, None)
+            .expect("wallet");
+        let amount = wallet
+            .receive(&token, Default::default())
+            .await
+            .expect("cdk receive (decode + swap)");
+        eprintln!("RECEIVED={amount}");
+    }
+
+    #[cfg(feature = "payer")]
+    #[tokio::test]
     #[ignore = "needs micronuts-audit-adapter (MINT_URL, default 127.0.0.1:3338)"]
     async fn mints_a_token_from_the_running_mint() {
-        let token = crate::payer::mint_token(&mint_base(), 21)
+        // HIL token source: amount is env-driven (HIL_MINT_SATS, default
+        // 21) so the phone/device suites get spendable multi-proof
+        // tokens. 1-sat tokens swap degenerately (empty outputs) against
+        // some mints — do not hand them to receive flows.
+        let sats: u64 = std::env::var("HIL_MINT_SATS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(21);
+        let token = crate::payer::mint_token(&mint_base(), sats)
             .await
             .expect("mint flow");
-        eprintln!(
-            "token ({} bytes): {}",
-            token.len(),
-            &token[..token.len().min(120)]
-        );
+        eprintln!("TOKEN={token}");
         assert!(
             token.starts_with("cashuA") || token.starts_with("cashuB"),
             "unexpected token prefix: {:?}",
