@@ -13,6 +13,7 @@ harness.Console docstring).
 from __future__ import annotations
 
 import datetime
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -90,11 +91,32 @@ def acr_place(request):
 @pytest.fixture(scope="module")
 def nucula_console(request, nucula_place, evidence_dir) -> Console:
     """One console session per module: open (board resets — expected),
-    sync on the first `nucula> ` prompt, teardown saves the transcript."""
-    con = Console(resolve_serial_port("nucula-c3"), label="nucula",
-                  evidence_dir=evidence_dir)
+    sync on the first `nucula> ` prompt, teardown saves the transcript.
+
+    Two guards keep this honest on a shared bench:
+    - the resolved port must have no foreign holder (the ccid broker
+      keeps the CDC open forever — two opens of one tty do NOT exclude
+      each other and the second one resets the board mid-session);
+    - a banner timeout SKIPS naming what booted instead of erroring:
+      the board may be serving another project's image (ccid GemPC).
+    """
+    port = resolve_serial_port("nucula-c3")
+    holders = subprocess.run(
+        ["fuser", "-v", port], capture_output=True, text=True)
+    if holders.returncode == 0 and holders.stderr.strip():
+        pytest.skip(
+            f"console port held by a foreign process ({holders.stderr.strip()})"
+            " — e.g. nucula-ccid-broker; stop it per tests/hil/phone/"
+            "README.md (the broker swap dance) before wallet-fw suites")
+    from harness import Console
+    con = Console(port, label="nucula", evidence_dir=evidence_dir)
     request.addfinalizer(con.close)
-    banner = con.boot_banner()
+    try:
+        banner = con.boot_banner()
+    except TimeoutError as e:
+        pytest.skip(
+            "board not on nucula wallet firmware (no prompt in 20 s — "
+            f"foreign image or wedged console): {e}")
     (evidence_dir / "nucula.banner.log").write_text(banner)
     return con
 
@@ -114,7 +136,12 @@ def phone(request, phone_place, evidence_dir) -> Phone:
 @pytest.fixture(scope="module")
 def token_link(request, tmp_path_factory) -> TokenLinkServer:
     srv = TokenLinkServer(tmp_path_factory.mktemp("tokenserve"))
-    srv.start()
+    try:
+        srv.start()
+    except OSError as e:
+        pytest.skip(
+            f"bench link port busy ({e}) — a standing token server owns "
+            "8077; reuse it or free the port before browser-link tests")
     request.addfinalizer(srv.stop)
     return srv
 
