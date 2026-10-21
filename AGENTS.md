@@ -90,7 +90,18 @@ length, so a short echo means a partial write even with SW 9000.
 
 Branches on Amperstrand/nucula only. Never file PRs or issues upstream
 (zeugmaster/nucula) without human review — see
-`docs/ROADMAP-AND-CONTRIBUTION.md`.
+`docs/ROADMAP-AND-CONTRIBUTION.md`. All upstream contact is human-gated:
+prepare the draft/evidence in-repo (or a local file) and wait for the
+owner's explicit per-item signoff.
+
+**Fork-PR trap (bit us 2026-10-21 — zeugmaster/nucula#10, closed in
+16 s):** this repo is a FORK of zeugmaster/nucula, so a bare
+`gh pr create` here defaults the PR base to the PARENT repo. ALWAYS
+pass the explicit target:
+
+    gh pr create -R Amperstrand/nucula --head <branch>
+
+and read back the repo line in the preview before submitting.
 
 
 ## Lab hardware: one single source of truth (2026-09-28)
