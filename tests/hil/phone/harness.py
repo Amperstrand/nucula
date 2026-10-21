@@ -221,9 +221,19 @@ class Phone:
         return r.stdout
 
     def dump_xml(self) -> str:
-        self.sh("uiautomator dump /sdcard/hil_ui.xml", timeout=60)
-        time.sleep(0.5)
-        return self.sh("cat /sdcard/hil_ui.xml")
+        """One uiautomator dump; '' on failure (concurrent uiautomator
+        sessions kill each other with rc=137 — a shared-phone lane is a
+        SKIP reason, not a suite error)."""
+        for _ in range(2):
+            r = subprocess.run(
+                ["adb", "-s", self.serial, "shell",
+                 "uiautomator dump /sdcard/hil_ui.xml"],
+                capture_output=True, text=True, timeout=60, check=False)
+            if r.returncode == 0:
+                time.sleep(0.5)
+                return self.sh("cat /sdcard/hil_ui.xml")
+            time.sleep(2)
+        return ""
 
     def screen_texts(self) -> list[str]:
         return re.findall(r'text="([^"]{2,60})"', self.dump_xml())
@@ -274,8 +284,11 @@ class Phone:
     def save_dump(self, name: str) -> Path | None:
         if not self.evidence_dir:
             return None
+        xml = self.dump_xml()   # best-effort: contention returns ''
+        if not xml:
+            return None
         p = self.evidence_dir / f"{name}.ui.xml"
-        p.write_text(self.dump_xml())
+        p.write_text(xml)
         return p
 
     # -- token receive over the browser-link channel ------------------------
