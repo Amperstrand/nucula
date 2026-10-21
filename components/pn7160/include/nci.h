@@ -9,10 +9,11 @@
 // PN7160 control pins (board-dependent). The I2C bus itself is owned by
 // the application and passed into nci_init().
 #if CONFIG_NUCULA_BOARD_NUCULAPCB
-// zeugmaster nucula PCB: pinout proven on the bench by ccid-firmware-rs
-// (crates/pn7160-nci transport consts, unit-asserted). DWL is not wired —
-// the chip runs NCI with DWL undriven (ccid-firmware-rs never drives a
-// DWL line on this board).
+// Nucula v2 (zeugmaster production PCB): pinout proven on the bench by
+// ccid-firmware-rs (pn7160-nci transport consts, unit-asserted) and
+// recorded in the upstream v2 schematic. VEN has an external pull-down;
+// DWL is strapped low on the PCB for NCI mode — no MCU download-mode
+// pin (GPIO4 belongs to I2C SDA).
 #define PN7160_IRQ_PIN   GPIO_NUM_6
 #define PN7160_VEN_PIN   GPIO_NUM_7
 #else // XIAO ESP32-C3

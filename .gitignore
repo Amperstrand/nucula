@@ -36,3 +36,8 @@ tests/host/build/
 rig/fuzz/corpus/*/*
 !rig/fuzz/corpus/*/seed*
 rig/fuzz/artifacts/
+
+# Local build/configuration archives and Python caches
+.local-backups/
+__pycache__/
+*.pyc

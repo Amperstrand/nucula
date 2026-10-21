@@ -64,7 +64,9 @@ esp_err_t nci_init(nci_context_t *ctx, i2c_master_bus_handle_t bus)
                         TAG, "gpio_isr_handler_add");
     gpio_intr_disable(PN7160_IRQ_PIN);
 
-    // VEN (+ DWL where the board wires it): outputs
+    // VEN (+ DWL where the board wires it): outputs. On v2 DWL is
+    // strapped low on the PCB and GPIO4 belongs to I2C SDA, so the
+    // NUCULAPCB build defines no DWL pin and the mask stays VEN-only.
     uint64_t out_mask = (1ULL << PN7160_VEN_PIN);
 #ifdef PN7160_DWL_PIN
     out_mask |= (1ULL << PN7160_DWL_PIN);
