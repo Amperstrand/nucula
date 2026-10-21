@@ -22,9 +22,9 @@ from harness import (  # noqa: E402
     AcquiredPlace,
     Console,
     LabgridBusy,
-    NUCULA_CONSOLE_PORT,
     Phone,
     TokenLinkServer,
+    resolve_serial_port,
 )
 
 RESULTS_ROOT = Path(__file__).parent.parent.parent / "hil-results"
@@ -91,7 +91,7 @@ def acr_place(request):
 def nucula_console(request, nucula_place, evidence_dir) -> Console:
     """One console session per module: open (board resets — expected),
     sync on the first `nucula> ` prompt, teardown saves the transcript."""
-    con = Console(NUCULA_CONSOLE_PORT, label="nucula",
+    con = Console(resolve_serial_port("nucula-c3"), label="nucula",
                   evidence_dir=evidence_dir)
     request.addfinalizer(con.close)
     banner = con.boot_banner()

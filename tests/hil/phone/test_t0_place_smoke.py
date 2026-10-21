@@ -12,7 +12,7 @@ import re
 
 import pytest
 
-from harness import Console, NUCULA_CONSOLE_PORT
+from harness import Console, resolve_serial_port
 
 
 def test_coordinator_places_listed():

@@ -19,10 +19,10 @@ MELT_TIMEOUT_S = 180
 
 @pytest.fixture()
 def clean_wallet(nucula_console):
-    nucula_console.cmd("wipe", timeout_s=30)
+    nucula_console.cmd("seed wipe", timeout_s=30)
     nucula_console.cmd("seed generate", timeout_s=60)
     yield nucula_console
-    nucula_console.cmd("wipe", timeout_s=30)
+    nucula_console.cmd("seed wipe", timeout_s=30)
 
 
 def _assert_contains(out: str, needle: str):
@@ -54,19 +54,16 @@ def test_wallet_lifecycle_vs_bench_mint(clean_wallet, mint_url, repo_root):
     assert m, out
 
     # -- melt leg: invoice then melt (auto-settling fake mint) -------------
-    out = con.cmd("invoice a=2", timeout_s=90)
-    if "invoice" not in out.lower() and "error" in out.lower():
-        pytest.skip(f"mint rejected invoice quote: {out!r}")
+    out = con.cmd("invoice 2", timeout_s=120)
     m = re.search(r"(lnbc[a-z0-9]+)", out)
     assert m, f"no bolt11 invoice printed:\n{out}"
     invoice = m.group(1)
     out = con.cmd(f"melt {invoice}", timeout_s=MELT_TIMEOUT_S)
     assert "error" not in out.lower(), out
-    _assert_contains(out, "melt")  # any confirmation print
-
-    # -- final balance + teardown wipe ------------------------------------
+    # melt consumed 2 sats (+ mint fee); balance must have shrunk but stayed > 0
     out = con.cmd("balance", timeout_s=30)
-    assert "total:" in out
+    m = re.search(r"total:\s*(\d+)", out)
+    assert m and 0 < int(m.group(1)) < 21, out
 
 
 def test_phone_receives_rig_token_over_browser_link(phone, token_link,

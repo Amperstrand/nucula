@@ -26,6 +26,9 @@ permissions:
 
 env:
   PYTHONDONTWRITEBYTECODE: '1'
+  # The phone's adb transport belongs to the host adb server (user root,
+  # 127.0.0.1:5037); the runner user's client shares it via this socket.
+  ADB_SERVER_SOCKET: 'tcp:127.0.0.1:5037'
 
 jobs:
   hil:

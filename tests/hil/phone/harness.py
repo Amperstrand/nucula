@@ -33,11 +33,24 @@ import serial
 COORDINATOR = os.environ.get("LG_COORDINATOR", "ai-legion:20408")
 PHONE_SERIAL = os.environ.get("HIL_PHONE_SERIAL", "RF8NB01ZYAH")
 
-NUCULA_CONSOLE_PORT = (
-    "/dev/serial/by-id/"
-    "usb-Espressif_USB_JTAG_serial_debug_unit_90:DA:72:9A:50:18-if00"
-)
+# Console port: resolved from the labgrid place (repo rule — no hardcoded
+# device paths), env override for offline dev.
+NUCULA_CONSOLE_PORT = os.environ.get("HIL_NUCULA_CONSOLE_PORT", "")
 NUCULA_PROMPT = "nucula> "
+
+
+def resolve_serial_port(place: str = "nucula-c3") -> str:
+    """SerialPort resource `port` param from the place (single source of
+    truth; falls back to the env default for offline collection)."""
+    if NUCULA_CONSOLE_PORT:
+        return NUCULA_CONSOLE_PORT
+    r = lg(place, "show")
+    m = re.search(r"'port':\s*'([^']+)'", r.stdout)
+    if not m:
+        raise RuntimeError(
+            f"no SerialPort 'port' param on place {place}; "
+            "set HIL_NUCULA_CONSOLE_PORT explicitly")
+    return m.group(1)
 
 BENCH_LINK_PORT = int(os.environ.get("HIL_LINK_PORT", "8077"))
 BENCH_LAN_IP = os.environ.get("HIL_BENCH_IP", "192.168.13.208")
@@ -246,6 +259,9 @@ class Phone:
         return m.group(1) if m else out.strip()
 
     def launch_cashu(self) -> None:
+        # Samsung app-sleeping DISABLES unused apps (observed 2026-10-21:
+        # enabled=3 after four idle days) — re-enable before launching.
+        self.sh("pm enable --user 0 com.cashu.me")
         self.sh("monkey -p com.cashu.me -c android.intent.category.LAUNCHER 1")
         time.sleep(4.0)
 
@@ -335,10 +351,12 @@ def mint_token_via_rig(repo_root: Path, mint_url: str, sats: int = 21,
     """
     env = dict(os.environ,
                MINT_URL=mint_url,
+               HIL_MINT_SATS=str(sats),
                CARGO_TARGET_DIR=str(repo_root / "rig" / "target-hil"))
     r = subprocess.run(
         ["cargo", "test", "--features", "payer", "--manifest-path",
          str(repo_root / "rig" / "Cargo.toml"),
+         "mints_a_token_from_the_running_mint",
          "--", "--ignored", "--nocapture"],
         capture_output=True, text=True, timeout=timeout_s, check=False, env=env)
     m = re.search(r"TOKEN=(cashu[AB][A-Za-z0-9_\-]+)", r.stdout + r.stderr)
