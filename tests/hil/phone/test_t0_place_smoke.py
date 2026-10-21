@@ -28,7 +28,9 @@ def test_place_acquire_release_cycle(request):
     from harness import AcquiredPlace, place_holder
     with AcquiredPlace("phone-s20"):
         assert place_holder("phone-s20") is not None
-    assert place_holder("phone-s20") == ""
+    # NOT asserting global freeness after release: on a live bench another
+    # lane legitimately re-acquires the instant we let go (observed in the
+    # first CI dispatch — the wallet-matrix lane queued on our release).
 
 
 def test_phone_adb_transport(phone):
