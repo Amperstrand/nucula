@@ -1,0 +1,34 @@
+{
+  "hardware_repository": "https://github.com/zeugmaster/nucula-board",
+  "hardware_branch": "rev-A",
+  "hardware_commit": "7584d71f3cb1b120934be2b80cfab4a015ecddfd",
+  "firmware_source_commit": "43ea779f042096c0c378dad409b0aeebbdb178f3",
+  "idf_version": "5.5.1",
+  "target": "esp32c3",
+  "flash_size_bytes": 4194304,
+  "application_offset": "0x30000",
+  "application_size_bytes": 1167184,
+  "application_sha256": "54826fe57e3ca7339fec3f4ac86bddd12818a796761e8f39999e059e5fa11c31",
+  "verification": {
+    "date": "2026-10-01",
+    "method": "esptool verify_flash 0x30000 build/nucula.bin",
+    "result": "digest matched",
+    "scope": "One connected Rev-A prototype; other devices were not individually verified.",
+    "flash_written": true,
+    "write_scope": "Application partition only; NVS, partition table and bootloader preserved.",
+    "nfc_transfer_test": "No live payment performed; console notification paths reviewed and firmware build passed.",
+    "runtime_check": "USB console responded to heap and nfc status commands; NFC reached idle after startup.",
+    "startup_observation": "Keyset refresh for mint slot 1 failed before NFC initialization completed."
+  },
+  "configuration": {
+    "wifi_credentials": "Local ignored main/wifi_config.h; credentials and firmware binaries are not published.",
+    "console": "USB Serial/JTAG",
+    "display": "Boost disabled and reset asserted for bring-up.",
+    "keyboard": "May remain disconnected."
+  },
+  "notes": [
+    "Subsequent README, evidence and ignore-rule commits do not change application source.",
+    "Rebuilding at another path or commit changes build metadata and can change the binary hash.",
+    "USB reconnection with a battery attached may require RESET due to the Rev-A VBUS backfeed issue."
+  ]
+}

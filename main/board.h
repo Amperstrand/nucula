@@ -2,12 +2,16 @@
 
 #include "driver/gpio.h"
 
-// Board definition. One shared I2C bus carries all peripherals; each
-// driver probes for its device at init and disables itself when absent,
-// so a bare module still boots into a working console + wallet.
+// Board definition: per-target (see Kconfig.projbuild). Upstream's
+// reference is Nucula v2 (ESP32-C3-WROOM-02-N4), tracked here as
+// NUCULA_BOARD_NUCULAPCB — one shared I2C bus carries all peripherals,
+// with external pull-ups to 3.0 V; NFC and keypad probe at boot; the
+// disconnected OLED is held off during prototype bring-up. Console +
+// wallet work without peripherals. Every driver probes for its device
+// at init and disables itself when absent, so a bare module (or any
+// other board) still boots into a working console + wallet.
 //
-// PN7160-specific pins (IRQ/VEN/DWL) live with the driver in nci.h.
-
+// PN7160-specific pins (IRQ/VEN) live with the driver in nci.h.
 #if CONFIG_NUCULA_BOARD_ATOM
 
 // M5Stack Atom Matrix + MFRC522 over the Grove port (same wiring as the
@@ -48,20 +52,26 @@
 
 #elif CONFIG_NUCULA_BOARD_NUCULAPCB
 
-// zeugmaster nucula production PCB (ESP32-C3 + PN7160). Pinout proven on
-// the bench by ccid-firmware-rs (pn7160-nci crate transport consts).
+// zeugmaster nucula production PCB = Nucula v2 (ESP32-C3 + PN7160).
+// Pinout proven on the bench by ccid-firmware-rs (pn7160-nci crate
+// transport consts) and recorded upstream in the v2 schematic.
 #define BOARD_I2C_SDA_PIN   GPIO_NUM_4
 #define BOARD_I2C_SCL_PIN   GPIO_NUM_5
 
-// No SSD1309 on this board — and GPIO5 is SCL here: driving an OLED
-// reset on it would rip SCL out of I2C mode before nfc_init() probes
-// the PN7160 (the "silent PN7160" bench incident, fork issue #12).
-#define BOARD_OLED_RST_PIN ((gpio_num_t)-1)
+// v2 wires the OLED boost input and reset (upstream schematic): power
+// high enables, reset high asserts through Q5. RST is GPIO10 here — NOT
+// GPIO5/SCL (the "silent PN7160" incident, fork issue #12, was driving
+// an OLED reset on the SCL line; v2's real RST pin leaves SCL alone).
+// The OLED may be unpopulated during bring-up: display code probes and
+// disables itself when absent.
+#define BOARD_OLED_POWER_PIN GPIO_NUM_3
+#define BOARD_OLED_RST_PIN   GPIO_NUM_10
 
 #else // XIAO ESP32-C3
 
 #define BOARD_I2C_SDA_PIN   GPIO_NUM_6   // D4
 #define BOARD_I2C_SCL_PIN   GPIO_NUM_7   // D5
+#define BOARD_OLED_RST_PIN  GPIO_NUM_5   // D3
 
 #endif
 
@@ -70,7 +80,9 @@
 
 // SSD1309 OLED (SA0 low = 0x3C, SA0 high = 0x3D)
 #define BOARD_OLED_ADDR     0x3C
-// Optional hardware reset pin (XIAO D3). Set to -1 if not wired.
+// Optional hardware reset pin — boards that wire it define it above
+// (v2: power+RST through Q5; XIAO: D3). The fallback keeps older
+// configs building; use ((gpio_num_t)-1) if genuinely not wired.
 #ifndef BOARD_OLED_RST_PIN
 #define BOARD_OLED_RST_PIN  GPIO_NUM_5
 #endif
