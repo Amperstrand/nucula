@@ -17,8 +17,8 @@ fs2 = "0.4"
 base64 = { version = "0.22", optional = true }
 pcsc = { version = "2.9", optional = true }
 serialport = { version = "4", optional = true }
-cdk = { path = "/home/ubuntu/src/cdk/crates/cdk", optional = true }
-cdk-sqlite = { path = "/home/ubuntu/src/cdk/crates/cdk-sqlite", optional = true }
+cdk = { version = "0.18.1", optional = true }
+cdk-sqlite = { version = "0.18.1", optional = true }
 rand = { version = "0.9", optional = true }
 tokio = { version = "1", optional = true, features = ["rt", "macros", "time"] }
 
