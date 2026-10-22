@@ -296,10 +296,24 @@ class Phone:
     def open_link_page_and_tap(self, host: str, port: int) -> None:
         """The proven token hand-off: open the bench link page in the
         browser and tap the link BY COORDINATES (uiautomator cannot see
-        web content). Assumes exactly one big link at the top of the page
-        (tokenserve/index.html layout: 40px link, padding 40px)."""
-        self.sh(f"am start -d http://{host}:{port}/")
+        web content). Handles: the no-default-browser resolver (pick
+        Samsung Browser/Chrome + Just once — bench phone has no default),
+        Samsung Internet first-run onboarding, then the link tap (page
+        layout is deterministic: single <a>, padding 40px, font 40px →
+        center ~ (270, ~110))."""
+        # Launch Chrome BY COMPONENT: the browser role on this bench
+        # phone is contested (Samsung Browser nags for default and can
+        # win the intent); the component launch bypasses both the
+        # resolver and the nag entirely.
+        self.sh("am force-stop com.sec.android.app.sbrowser")
+        self.sh("am start -n com.android.chrome/"
+                "com.google.android.apps.chrome.IntentDispatcher "
+                f"-d http://{host}:{port}/")
         time.sleep(5.0)
+        # browser resolver ("Complete action using") — no default is set
+        if self.tap_text("Samsung Browser", settle=3.0) or \
+                self.tap_text("Chrome", settle=3.0):
+            self.tap_text("Just once", settle=4.0)
         # Samsung Internet first-run onboarding (Continue/Next/Start)
         for _ in range(3):
             if not self.tap_text("Continue", settle=2.0):
@@ -308,9 +322,15 @@ class Phone:
             if not self.tap_text("Next", settle=2.0):
                 break
         self.tap_text("Start", settle=2.0)
-        # tap the link: page layout is deterministic (single <a>,
-        # padding 40px, font 40px → center ~ (270, ~100))
-        self.tap_bounds(540 // 2, 110, settle=6.0)
+        time.sleep(3.0)
+        # tap the link by coordinates — center of the full-screen block
+        self.tap_bounds(540 // 2, 1200, settle=6.0)
+        # cashu: deep-link resolver (bench phone has 2 wallets installed:
+        # cashu.me "Cashu" + "Minibits") — pin to Cashu, ALWAYS (bench
+        # determinism; this is a dedicated test phone).
+        if self.tap_text("Cashu", settle=4.0):
+            if not self.tap_text("Always", settle=4.0):
+                self.tap_text("Just once", settle=4.0)
 
 
 # --------------------------------------------------------------------------
@@ -322,9 +342,14 @@ class TokenLinkServer:
     bench LAN (ufw 8077/tcp is already open). Page layout matches the
     proven tokenserve template so the phone taps a stable coordinate."""
 
+    # Full-screen tap target: uiautomator cannot see web content, so the
+    # phone taps by coordinates — the link block fills the viewport and
+    # any tap below the browser chrome lands on it.
     PAGE = (
-        "<html><body style=\"background:#111;color:#fff;font-size:32px\">"
-        "<a id=\"t\" style=\"color:#6cf;font-size:40px;padding:40px\" "
+        "<html><head><meta name='viewport' content='width=device-width, "
+        "initial-scale=1'></head><body style=\"background:#111;color:#fff;"
+        "margin:0\"><a id=\"t\" style=\"display:block;color:#6cf;"
+        "font-size:48px;text-align:center;padding:220px 30px\" "
         "href=\"cashu:{token}\">TAP TO RECEIVE TOKEN</a></body></html>"
     )
 
