@@ -80,16 +80,26 @@ def test_phone_receives_rig_token_over_browser_link(phone, token_link,
     phone.open_link_page_and_tap(BENCH_LAN_IP, BENCH_LINK_PORT)
     phone.save_dump("t2_after_link_tap")
 
-    # Receive-Ecash sheet: amount parsed + a receive/confirm button
-    deadline = __import__("time").monotonic() + 30
+    # Receive-Ecash sheet: shows the FEE-ADJUSTED amount (8 sats in =
+    # "₿7" + 1 sat fee on this mint) — assert on the sheet identity +
+    # mint, never the raw amount digit.
+    import time as _t
+    deadline = _t.monotonic() + 45
     seen = False
-    while __import__("time").monotonic() < deadline:
+    while _t.monotonic() < deadline:
         texts = phone.screen_texts()
-        if any("8" in t for t in texts) and any(
-                k in " ".join(texts).lower() for k in ("receive", "confirm")):
+        joined = " ".join(texts)
+        if "Receive Ecash" in joined and mint_url in joined:
             seen = True
             break
-        phone.tap_text("Receive", settle=3.0)
+        # the app may sit on a stale sheet from earlier flows — back out
+        phone.sh("input keyevent KEYCODE_BACK")
+        _t.sleep(2.5)
     evidence_dir.joinpath("t2_phone_receive_texts.log").write_text(
         "\n".join(phone.screen_texts()))
-    assert seen, "phone did not show a receive sheet for the linked token"
+    assert seen, "phone did not show the Receive Ecash sheet for the linked token"
+    # complete the receive and confirm the wallet home returns
+    phone.tap_text("Receive", settle=6.0)
+    phone.tap_text("Done", settle=3.0)
+    _t.sleep(4)
+    phone.save_dump("t2_after_receive")
