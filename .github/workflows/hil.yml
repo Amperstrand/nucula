@@ -29,6 +29,9 @@ env:
   # The phone's adb transport belongs to the host adb server (user root,
   # 127.0.0.1:5037); the runner user's client shares it via this socket.
   ADB_SERVER_SOCKET: 'tcp:127.0.0.1:5037'
+  # The runner service is not a login shell: without this the rig build
+  # resolves to the ancient system cargo (1.75, cannot parse lockfile v4).
+  PATH: '/home/ubuntu/.cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 
 jobs:
   hil:
