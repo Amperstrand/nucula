@@ -64,6 +64,17 @@ public:
         return nvs_get_blob(h_, key, out.data(), &required) == ESP_OK;
     }
 
+    // First-pass blob probe: the raw esp_err_t of the size query, so
+    // callers can tell "key absent" (ESP_ERR_NVS_NOT_FOUND) apart from
+    // "present but unreadable" (get_blob collapses both to false).
+    esp_err_t probe_blob(const char* key)
+    {
+        size_t required = 0;
+        if (!ok_)
+            return ESP_ERR_INVALID_STATE;
+        return nvs_get_blob(h_, key, nullptr, &required);
+    }
+
 private:
     nvs_handle_t h_ = 0;
     esp_err_t err_ = ESP_FAIL;

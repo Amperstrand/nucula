@@ -49,6 +49,7 @@ add_executable(nucula_host_tests
     test_main.cpp
     nvs_shim.cpp
     persistence_boundary_tests.cpp
+    fresh_wallet_tests.cpp
     ${TINYCBOR_SRC}
     ${MBEDTLS_SRC}
     ${MAIN_DIR}/hex.c

@@ -161,7 +161,20 @@ bool Wallet::load_proofs()
     char key[16];
     slot_key(key, sizeof(key), "proofs", nvs_slot_);
     std::string blob;
-    if (!nvs.get_blob(key, blob)) {
+    const esp_err_t probe = nvs.probe_blob(key);
+    if (probe == ESP_ERR_NVS_NOT_FOUND) {
+        // Fresh wallet: no proofs were EVER persisted here. Starting
+        // empty is the correct state, not a load failure — there is
+        // nothing to protect. Degrading on this case (the pre-fix
+        // behavior) made every first-boot wallet read-only, so a fresh
+        // device could never receive its first token (bench-proven
+        // 2026-10-25: TollGate PoC /pay rejected a valid UNSPENT token
+        // while "DEGRADED-READ-ONLY since boot" on a blank NVS).
+        ESP_LOGI(TAG, "[%d] no persisted proofs (fresh wallet) — starting empty",
+                 nvs_slot_);
+        return true;
+    }
+    if (probe != ESP_OK || !nvs.get_blob(key, blob)) {
         g_wallet_nvs_stat.load_fails++;
         return false;
     }
