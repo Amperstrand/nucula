@@ -27,6 +27,12 @@ std::map<std::string, std::string> *ns_of(nvs_handle_t h)
 
 } // namespace
 
+// Test hook: erase the whole in-memory store so each test starts fresh.
+extern "C" void nvs_shim_reset()
+{
+    store().ns.clear();
+}
+
 extern "C" {
 
 esp_err_t nvs_open(const char *ns, nvs_open_mode_t mode, nvs_handle_t *out)
