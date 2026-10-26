@@ -1,0 +1,22 @@
+offset_ms,rep,phase,amount,mint_state,boot_balance,degraded
+100,0,pre-post,21,UNSPENT,966,False
+100,1,pre-post,21,UNSPENT,966,False
+200,0,pre-swap,21,UNSPENT,966,False
+200,1,pre-swap,21,UNSPENT,966,False
+300,0,pre-post,21,UNSPENT,966,False
+300,1,pre-swap,21,UNSPENT,966,False
+400,0,pre-swap,21,UNSPENT,966,False
+400,1,pre-swap,21,UNSPENT,966,False
+500,0,pre-swap,21,UNSPENT,966,False
+500,1,pre-swap,21,UNSPENT,None,False
+Traceback (most recent call last):
+  File "/root/src/nucula/tools/powercut/powercut.py", line 245, in <module>
+    main()
+  File "/root/src/nucula/tools/powercut/powercut.py", line 230, in main
+    r = run_cut(con, off)
+        ^^^^^^^^^^^^^^^^^
+  File "/root/src/nucula/tools/powercut/powercut.py", line 173, in run_cut
+    ensure_phone()
+  File "/root/src/nucula/tools/powercut/powercut.py", line 151, in ensure_phone
+    raise RuntimeError("phone did not join the AP")
+RuntimeError: phone did not join the AP

@@ -1,0 +1,12 @@
+offset_ms,rep,phase,amount,mint_state,boot_balance,degraded
+Traceback (most recent call last):
+  File "/root/src/nucula/tools/powercut/powercut.py", line 253, in <module>
+    main()
+  File "/root/src/nucula/tools/powercut/powercut.py", line 238, in main
+    r = run_cut(con, off)
+        ^^^^^^^^^^^^^^^^^
+  File "/root/src/nucula/tools/powercut/powercut.py", line 181, in run_cut
+    ensure_phone()
+  File "/root/src/nucula/tools/powercut/powercut.py", line 159, in ensure_phone
+    raise RuntimeError("phone did not join the AP")
+RuntimeError: phone did not join the AP
