@@ -10,19 +10,22 @@ vs device boot balance. 2 reps per offset, 100 ms steps.
 
 | Offset after POST | Phase (console) | Mint | Wallet delta | Verdict |
 |---|---|---|---|---|
-| 100–1100 ms | pre-post / pre-swap | UNSPENT | 0 | clean abort — no loss |
-| **1200 ms** | (swap dispatched) | **SPENT** | **0** | **LOST** |
+| 100–800 ms | pre-post / pre-swap | UNSPENT | 0 | clean abort — no loss |
+| **900–1200 ms** | swap dispatched (console marker not yet logged) | **SPENT** | **0** | **LOST** |
 | **1300–1500 ms** | swap-in-flight | **SPENT** | **0** | **LOST** |
 | **1600 ms** | post-swap-response | **SPENT** | **0** | **LOST** |
-| 1700 ms+ | post-swap-response | SPENT | +21 | recovered (commit landed) |
+| 1700 ms+ | post-swap-response / post-commit | SPENT | +21 | recovered (commit landed) |
 
 ## Findings
 
-1. **The loss window is real, deterministic, and ~450 ms wide**
-   (≈1200–1650 ms after the client's POST at this wallet size):
-   10/10 cuts inside it consumed the token at the mint without the new
+1. **The loss window is real, deterministic, and ~800 ms wide**
+   (≈850–1650 ms after the client's POST at this wallet size; corrected
+   from an initial 1200 ms reading once sweep 3's full rows landed):
+   16/16 cuts inside it consumed the token at the mint without the new
    proofs persisting. 21 sats lost per cut. Hypothesis H1's premise is
-   now measured fact, not conjecture.
+   now measured fact, not conjecture. (Console phase labels lag the mint
+   truth near the leading edge — the swap had already been dispatched
+   before its marker could print; checkstate is the authority.)
 2. **The window scales with wallet size**: its far half is the NVS
    whole-blob save (117 proofs ≈ 10 KB ≈ hundreds of ms of erase+program
    plus adopt). A bigger wallet widens the window; the delta-journal
@@ -43,5 +46,6 @@ on boot, any journaled range recovers by re-derivation + re-POST
 COMPAT-LEDGER fact) or checkstate. Re-run this exact sweep against the
 fix: pass = zero LOST rows at every offset.
 
-Raw data: bench scratch `powercut-sweep{1,2,3}.csv` (30 measured cuts);
-harness is deterministic and re-runnable.
+Raw data: `powercut-sweep{1,2,3}.csv` alongside this doc (38 measured
+cuts; sweeps 1–2 were cut short by the board-hang side effect and
+resumed); harness is deterministic and re-runnable.
