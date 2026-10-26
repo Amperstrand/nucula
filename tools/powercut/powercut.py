@@ -140,14 +140,22 @@ def sh(cmd, timeout=60):
 
 
 def ensure_phone():
-    out = sh("ip addr show wlan0")
-    if "172.29.139." in out:
-        return
-    sh(f"cmd wifi connect-network {SSID} open")
-    for _ in range(20):
-        time.sleep(2)
+    for attempt in range(3):
         if "172.29.139." in sh("ip addr show wlan0"):
             return
+        if attempt == 0:
+            sh(f"cmd wifi connect-network {SSID} open")
+        else:
+            # full radio cycle: the phone's stack flakes after many cycles
+            sh("svc wifi disable")
+            time.sleep(4)
+            sh("svc wifi enable")
+            time.sleep(8)
+            sh(f"cmd wifi connect-network {SSID} open")
+        for _ in range(20):
+            time.sleep(2)
+            if "172.29.139." in sh("ip addr show wlan0"):
+                return
     raise RuntimeError("phone did not join the AP")
 
 
