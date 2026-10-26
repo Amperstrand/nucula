@@ -126,14 +126,21 @@ are the real hazards** (per-save cost rises until the blob exceeds NVS's
 
 ## 4. Hypotheses (each with its killing experiment)
 
-- **H1 — Premint journal (write-ahead before swap).** Persist blinding
-  factors + secrets + blinded outputs *before* the swap POST. Crash
-  between swap and save becomes recoverable: re-POST the same swap; on a
-  cdk-family mint the replay cache returns the original signatures;
-  unblind from the journaled premint. *Experiment: bench harness that
-  power-cuts (DTR reset) at the window between swap-response and NVS
-  commit; assert funds recover on boot. Pass = zero permanent loss across
-  ≥20 cuts. Cost: ~1–2 KB NVS per in-flight receive, cleared on commit.*
+- **H1 — Write-ahead before swap; with NUT-13 derivation it is a counter
+  range, not a premint blob.** (Amended after the ecosystem survey — see
+  cashu-audit research/WALLET-PERSISTENCE-PATTERNS.md: minibits stores
+  `{keysetId, start, count, next}` on its reservation row "written BEFORE
+  the request is sent"; CocoCashuSwift's CounterRepository protocol
+  requires the advance persisted before `reserve` returns.) For nucula:
+  persist a ~24-byte derivation-range record before the swap POST; crash
+  after swap recovers by re-deriving outputs and re-POSTing (cdk-family
+  replay cache returns the original signatures) or via checkstate. This
+  merges H5 into H1 — one mechanism. *Experiment:
+  tools/powercut/powercut.py sweeps DTR cuts across the receive path and
+  scores each cut as clean-abort / recovered / LOST / torn from
+  mint-side checkstate + boot balance. Baseline (unmodified nucula)
+  quantifies today's loss window; the fix re-runs the same sweep to
+  zero.*
 - **H2 — Quote-id journal before invoice return.** Persist active
   ln-quote ids before the client sees the invoice; on boot re-check
   each, mint+grant the PAID ones (mint quotes are locked and single-use,
@@ -151,11 +158,11 @@ are the real hazards** (per-save cost rises until the blob exceeds NVS's
   *Experiment: measure max commit latency vs wallet size before/after;
   assert flat under the watchdog budget.*
 - **H5 — Seed-derived secrets + checkstate reconstruction** (nutshell
-  nut-06 style). Secrets derived from a device seed + counter; a
-  high-water counter is the only critical durable fact. Wallet
-  reconstruction = derive candidates, batch checkstate, keep unspent.
-  *Experiment: wipe NVS entirely, boot, assert wallet balance
-  reconstructs to the mint's truth within N checkstate round-trips.*
+  nut-06 style) — folded into H1 by the survey: the derivation range IS
+  the journal, and reconstruction = re-derive from the seed + batch
+  checkstate against the mint. *Experiment unchanged: wipe NVS entirely,
+  boot, assert balance reconstructs to the mint's truth within N
+  checkstate round-trips.*
 - **H6 — Bounded wallet via consolidation swap.** Cap proof count (e.g.
   48–64); when a receive would exceed it, swap inputs to a
   minimal-denomination output set. Makes H4's blob size and the

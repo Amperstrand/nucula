@@ -135,7 +135,15 @@ static esp_http_client_handle_t slot_client_for(const char *url)
         .transport_type = is_https ? HTTP_TRANSPORT_OVER_SSL
                                    : HTTP_TRANSPORT_OVER_TCP,
         .keep_alive_enable = true,
-        .save_client_session = true,   // TLS session ticket -> fast reconnect
+        /* Session tickets OFF: a stale/rejected ticket makes the server
+         * (observed: Caddy) send a fatal alert mid-handshake
+         * (MBEDTLS_ERR_SSL_FATAL_ALERT_MESSAGE, -0x7F00) — and because the
+         * saved session lives in the connection handle, every reconnect
+         * re-presents it: ALL requests to that origin fail with
+         * ESP_ERR_HTTP_CONNECT (~100 ms, TCP fine, DNS fine) until reboot.
+         * Bench evidence: t-a7670g-tollgate issue #23, soak runs 3-8.
+         * Cost of the full handshake: ~1 RTT (~120 ms over LTE). */
+        .save_client_session = false,
     };
     if (is_https)
         cfg.crt_bundle_attach = esp_crt_bundle_attach;
