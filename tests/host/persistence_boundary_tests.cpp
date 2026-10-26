@@ -160,7 +160,6 @@ static int hexc_parse_test()
 
 int persistence_boundary_run_tests()
 {
-    int fails = 0;
     static const int64_t balances[] = {700, 701, 713, 714, 715, 1000, 1176};
     bool all_ok = true;
     bool roundtrip_ok = true;
