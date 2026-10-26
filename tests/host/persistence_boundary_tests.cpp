@@ -104,6 +104,60 @@ bool proofs_equal(const Proof &a, const Proof &b)
 
 } // namespace
 
+
+// ---------------------------------------------------------------------------
+// HEX-C regression guard (corpus http01-post/hex-c-token)
+//
+// A structurally valid V3 token whose proof C values are non-canonical
+// hex (not valid compressed points) must still DESERIALIZE — the failure
+// belongs to the processing stage (payment-processing-failed on the
+// gate), not the parser (payment-error-invalid-token). Garbage must
+// keep failing the parse.
+// ---------------------------------------------------------------------------
+
+static int hexc_parse_test()
+{
+    // verbatim corpus/tokens/v3_v2_hex_c.cashu
+    const char *tok =
+    "cashuAeyJ0b2tlbiI6W3sibWludCI6Imh0dHA6Ly8xOTIuMTY4LjEzLjIyMTo4Mz"
+    "gzIiwicHJvb2ZzIjpbeyJhbW91bnQiOjIsImlkIjoiMDFlNzNlNzVhMDgwOTYwNC"
+    "IsInNlY3JldCI6Ijg5MzZlMTcyM2M1NDdkMjEwZmFjYTg1MjRmOGI1ZjIyYjViOD"
+    "liYjg1OTE1ZDIyMWVkODI5NzQ1OTI3ZTNjOWQiLCJDIjoiZDM3ZWRmZTliZDM4Nz"
+    "c0ZDM0ZjVjZTc3ZDljZDM0ZjVkZWRkZGRhNzliNjliZTM5ZWI2NmY1NmI5ZDc3ZG"
+    "Y0ZWI4ZWRiNmY1ZTlhZTM2ZWJhZDM1N2Y4Zjc3NjlmZTNkZTciLCJkbGVxIjp7Im"
+    "UiOiJhNDZkZTM3ZTU2M2I4M2UzYmNlNjJjZTJkYjk5N2FiMzU3MzY0NGFjYzgxZT"
+    "I2NGRmNzNjYjkxZjI5Zjc1ODI0IiwicyI6IjUwMDIxMWRjM2QyMGQ5MTNhMjM0NT"
+    "cwMGFjNTQ4YmE1OWZlMjM1NzM2NWY5MWJkMGY4NGFkYzcxMDE4YjU1NzEiLCJyIj"
+    "oiZDc3ZjcyYzQzODFiMGE4MjFhMWRjYTNhMzY1ZGM0NzA5OTIyNDVkOWIyYzY1MD"
+    "VlZDYwNzA3MmZjMTlmZTNhNiJ9fSx7ImFtb3VudCI6MiwiaWQiOiIwMWU3M2U3NW"
+    "EwODA5NjA0Iiwic2VjcmV0IjoiZDJmYjgyMjhhOWY2OGIyNmY5NGE2MjU2MzZmMj"
+    "hhNjc1N2RlZTc5ODUzZjFiMzFkMGY4OTMyYTcyYWYxMDQxMCIsIkMiOiJkMzdlYj"
+    "RkNzc3Nzc2OWVkN2JlZGRkZjQ3YjVkYmRmN2RkOWM2OWRkMWVlYmE2YjQ2ZjZlZj"
+    "Q3N2Q2ZmQ3Mzc3ZjQ3ZjllN2E2ZGU3N2FmMWI3MWRlMzc2OWRkYjdkMWRkMyIsIm"
+    "RsZXEiOnsiZSI6ImJmNThiNGE5MDZlODk1YTljNmE0ODEyYWFlZGI5ZGY5ZjFlZD"
+    "kwN2YzZWNmZDg1MWI2ZDFhMzQ2M2ExZjYyMzIiLCJzIjoiMGJjZjU3MGNlNjljZj"
+    "g3M2FiYWJkODg2MGEwNGRhODFkODM5NGJjMzUwZjExMjBkZmM4NzFmMzk0Zjc2Mm"
+    "YxMSIsInIiOiI2YWViMjNkMzVhMTM0ZTE2YzA1ZGFhMzVkZTc5MGUxNzc4NTAwNz"
+    "ZlZDJjZmU4MGUyZTU4MTE2ZTU0YmU1ODdhIn19XX1dLCJ1bml0Ijoic2F0In0";
+
+    Token out;
+    if (!deserialize_token(tok, out)) {
+        printf("  hexc: lenient parse FAILED (would misclassify as invalid-token)\n");
+        return 1;
+    }
+    if (out.proofs.empty() || out.proofs[0].C.empty()) {
+        printf("  hexc: parsed but proofs/C missing\n");
+        return 1;
+    }
+    // garbage must still fail the parse
+    if (deserialize_token("cashuAnotbase64!!", out)) {
+        printf("  hexc: garbage parsed (parser too lenient)\n");
+        return 1;
+    }
+    printf("  hexc: lenient parse ok (C carried, garbage rejected)\n");
+    return 0;
+}
+
 int persistence_boundary_run_tests()
 {
     static const int64_t balances[] = {700, 701, 713, 714, 715, 1000, 1176};
@@ -192,7 +246,11 @@ int persistence_boundary_run_tests()
     printf("[%s] persistence boundary: corrupted count rejected pre-reserve\n",
            all_ok ? "PASS" : "FAIL");
 
-    return (roundtrip_ok && bound_ok && diet_ok && all_ok) ? 0 : 1;
+    int hexc_fails = hexc_parse_test();
+    printf("[%s] hex-c: non-canonical C deserializes (processing-stage failure)\n",
+           hexc_fails == 0 ? "PASS" : "FAIL");
+
+    return (roundtrip_ok && bound_ok && diet_ok && all_ok && hexc_fails == 0) ? 0 : 1;
 }
 
 } // namespace cashu
