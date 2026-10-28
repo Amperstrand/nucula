@@ -191,6 +191,13 @@ def run_cut(con, offset_ms):
     con.buf.clear()
     time.sleep(3)
     bal, degraded = wait_boot(con)
+    if bal is None:
+        # issue #24: some cuts hard-hang the board with no WDT recovery —
+        # pulse a second reset so the sweep can continue; mark the row
+        con.cut()
+        con.buf.clear()
+        time.sleep(3)
+        bal, degraded = wait_boot(con)
     state = checkstate(secrets)
     log = pre + "\n===CUT===\n" + con.text()
     phase = "unknown"
@@ -207,6 +214,7 @@ def run_cut(con, offset_ms):
     return {
         "offset_ms": offset_ms, "phase": phase, "amount": amount,
         "mint_state": state, "boot_balance": bal, "degraded": degraded,
+        "hang": bal is None,
     }
 
 
@@ -221,7 +229,7 @@ def main():
     offsets = list(range(a, b + 1, s))
 
     con = Console()
-    print("offset_ms,rep,phase,amount,mint_state,boot_balance,degraded",
+    print("offset_ms,rep,phase,amount,mint_state,boot_balance,degraded,hang",
           flush=True)
     try:
         # baseline: current balance with no cut
@@ -240,8 +248,8 @@ def main():
                         and r["boot_balance"] is not None
                         and r["boot_balance"] - (prev_bal or 0) < r["amount"])
                 print(f"{off},{rep},{r['phase']},{r['amount']},"
-                      f"{r['mint_state']},{r['boot_balance']},{r['degraded']}",
-                      flush=True)
+                      f"{r['mint_state']},{r['boot_balance']},{r['degraded']},"
+                      f"{r['hang']}", flush=True)
                 if r["boot_balance"] is not None:
                     prev_bal = r["boot_balance"]
                 time.sleep(2)

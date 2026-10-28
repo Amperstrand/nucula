@@ -341,11 +341,19 @@ bool Wallet::swap(std::vector<Proof>& inputs, int amount,
     combined.insert(combined.end(), change_dist.begin(), change_dist.end());
     std::sort(combined.begin(), combined.end());
 
+    // H1 write-ahead: remember the derivation range + inputs BEFORE the
+    // POST. If we crash after the mint executes the swap, recovery
+    // re-derives these outputs and re-POSTs byte-identically (replay
+    // cache answers with the original signatures).
+    const uint32_t c0 = s_seed_loaded ? load_counter(ks->id) : 0;
+
     BlindingData blinding;
     if (!generate_outputs(combined, ks->id, blinding))
         return false;
 
     std::vector<Proof> stripped = strip_dleq_for_send(inputs);
+    if (s_seed_loaded)
+        journal_swap_write(stripped, ks->id, c0, combined);
     if (!attach_p2pk_witnesses(ctx_, stripped))
         return false;
 
@@ -358,12 +366,20 @@ bool Wallet::swap(std::vector<Proof>& inputs, int amount,
 
     SwapResponse swap_resp;
     if (!mint_post("swap", mint_url_ + "/v1/swap", body.c_str(), swap_resp,
-                   &last_error_))
+                   &last_error_)) {
+        /* transport failure (no HTTP answer) leaves the swap ambiguous:
+         * KEEP the journal for boot/lazy recovery. A definitive mint
+         * rejection proves the inputs were not spent — clear. */
+        if (last_error_.status != 0)
+            journal_swap_clear();
         return false;
+    }
 
     std::vector<Proof> all_proofs;
-    if (!unblind_signatures(swap_resp.signatures, blinding, *ks, all_proofs))
+    if (!unblind_signatures(swap_resp.signatures, blinding, *ks, all_proofs)) {
+        journal_swap_clear();   // deterministic failure — retrying can't fix
         return false;
+    }
 
     // Separate send proofs from change proofs
     new_proofs.clear();
@@ -395,6 +411,7 @@ bool Wallet::swap(std::vector<Proof>& inputs, int amount,
 bool Wallet::receive(const Token& token, std::vector<Proof>& proofs_out)
 {
     last_error_ = {};
+    recover_swap_journal();   // retry any pending write-ahead first
     if (degraded_) {
         last_error_ = MintError{0, -1, "wallet is DEGRADED (proof load was skipped at boot) - reboot to recover; persisted proofs are protected"};
         return false;
@@ -442,6 +459,7 @@ bool Wallet::receive(const Token& token, std::vector<Proof>& proofs_out)
     format_amount(amt, sizeof(amt), got, unit.c_str());
     ESP_LOGI(TAG, "received %s (%d proofs)", amt, (int)proofs_out.size());
     save_proofs();
+    journal_swap_clear();     // proofs durable — the write-ahead retires
     return true;
 }
 
@@ -840,5 +858,81 @@ int Wallet::unblind_melt_change(const MeltQuote& resp,
              amt, (int)change_proofs.size());
     return change_amount;
 }
+
+} // namespace cashu
+
+// -------------------------------------------------------------------------
+// H1 recovery: re-POST the journaled swap (see wallet_journal.cpp)
+// -------------------------------------------------------------------------
+namespace cashu {
+bool Wallet::recover_swap_journal()
+{
+    SwapJournal j;
+    if (!journal_swap_read(j))
+        return true;                       // nothing pending
+
+    ESP_LOGW(TAG, "recovering journaled swap (%d inputs, counter %lu+%d)",
+             (int)j.inputs.size(), (unsigned long)j.counter_start,
+             (int)j.amounts.size());
+
+    const Keyset* ks = nullptr;
+    auto find_ks = [&](const std::string& id) -> const Keyset* {
+        for (const auto& k : keysets_)
+            if (k.id == id) return &k;
+        return nullptr;
+    };
+    ks = find_ks(j.keyset_id);
+    if (!ks) {
+        load_keysets();
+        ks = find_ks(j.keyset_id);
+    }
+    if (!ks) {
+        ESP_LOGE(TAG, "journal keyset unknown after refresh — keeping");
+        return false;
+    }
+
+    BlindingData blinding;
+    if (!journal_derive_outputs(j, blinding)) {
+        ESP_LOGE(TAG, "cannot re-derive outputs (seed gone?) — keeping");
+        return false;
+    }
+
+    SwapRequest req{j.inputs, blinding.outputs};
+    std::string body = serialize(req);
+    if (body.empty()) {
+        journal_swap_clear();
+        return false;
+    }
+
+    SwapResponse resp;
+    if (!mint_post("swap-recovery", mint_url_ + "/v1/swap", body.c_str(),
+                   resp, &last_error_)) {
+        if (last_error_.status != 0) {
+            ESP_LOGE(TAG, "recovery rejected (code %d) — clearing",
+                     last_error_.code);
+            journal_swap_clear();
+        } else {
+            ESP_LOGW(TAG, "mint unreachable — journal kept for retry");
+        }
+        return false;
+    }
+
+    std::vector<Proof> proofs;
+    if (!unblind_signatures(resp.signatures, blinding, *ks, proofs)) {
+        ESP_LOGE(TAG, "recovered signatures failed to unblind — clearing");
+        journal_swap_clear();
+        return false;
+    }
+
+    int64_t got = adopt_proofs(proofs);
+    save_proofs();
+    journal_swap_clear();
+    ESP_LOGW(TAG, "RECOVERED %lld sats from journaled swap (%d proofs)",
+             (long long)got, (int)proofs.size());
+    return true;
+}
+
+// (wallet_flows.cpp closes its primary namespace above; the recovery
+// function that follows is intentionally top-level-qualified)
 
 } // namespace cashu

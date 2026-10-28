@@ -66,6 +66,7 @@ add_executable(nucula_host_tests
     ${MAIN_DIR}/selftest.cpp
     ${MAIN_DIR}/wallet.cpp
     ${MAIN_DIR}/wallet_nvs.cpp
+    ${MAIN_DIR}/wallet_journal.cpp
     ${MAIN_DIR}/wallet_blob.cpp
     ${MAIN_DIR}/wallet_blind.cpp
     ${MAIN_DIR}/wallet_identity.cpp

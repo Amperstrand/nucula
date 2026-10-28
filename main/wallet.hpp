@@ -56,11 +56,29 @@ public:
     static uint32_t load_counter(const std::string& keyset_id);
     static bool save_counter(const std::string& keyset_id, uint32_t counter);
 
+    // research/mcu-money-safety H1: swap write-ahead journal
+    struct SwapJournal {
+        std::string keyset_id;
+        uint32_t counter_start = 0;
+        std::vector<int> amounts;
+        std::vector<Proof> inputs;
+    };
+    bool journal_swap_write(const std::vector<Proof>& inputs,
+                            const std::string& keyset_id,
+                            uint32_t counter_start,
+                            const std::vector<int>& amounts);
+    bool journal_swap_read(SwapJournal& out);
+    bool journal_swap_clear();
+    bool journal_swap_exists();
+
     struct BlindingData {
         std::vector<BlindedMessage> outputs;
         std::vector<std::string> secrets;
         std::vector<std::string> blinding_factors;
     };
+
+    bool journal_derive_outputs(const SwapJournal& j, BlindingData& out);
+    bool recover_swap_journal();
 
     bool generate_outputs(const std::vector<int>& amounts,
                           const std::string& keyset_id,

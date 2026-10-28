@@ -17,6 +17,7 @@
 
 #include "cashu_json.hpp"
 #include "wallet_blob.hpp"
+#include "wallet.hpp"
 
 #include <cstdio>
 #include <cstring>
@@ -158,6 +159,47 @@ static int hexc_parse_test()
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// H1 swap-journal guard: write-ahead round-trips; derivation from a
+// journaled range is deterministic (recovery's core premise).
+// ---------------------------------------------------------------------------
+
+static int swap_journal_test()
+{
+    // the journal methods need a Wallet instance (they are members);
+    // a default-constructed one has no NVS state of its own here
+    cashu::Wallet w{"https://host-test.example", nullptr};
+    // round-trip
+    cashu::Proof a;
+    a.id = "018bd9342ad84095ac74dd44e2f72f53acd9ec6c44893e0a79daa73fbbcf4f7ff6";
+    a.amount = 2;
+    a.secret = std::string(64, 'a');
+    a.C = std::string(66, 'b');
+    std::vector<cashu::Proof> ins{a};
+    if (!w.journal_swap_write(ins, a.id, 7, {1, 2, 4})) {
+        printf("  swpjrnl: write failed\n");
+        return 1;
+    }
+    cashu::Wallet::SwapJournal j;
+    if (!w.journal_swap_read(j) || j.inputs.size() != 1
+        || j.counter_start != 7 || j.amounts.size() != 3
+        || j.amounts[2] != 4 || j.inputs[0].secret != a.secret) {
+        printf("  swpjrnl: round-trip mismatch\n");
+        return 1;
+    }
+    if (!w.journal_swap_exists()) {
+        printf("  swpjrnl: exists() false after write\n");
+        return 1;
+    }
+    w.journal_swap_clear();
+    if (w.journal_swap_exists()) {
+        printf("  swpjrnl: exists() true after clear\n");
+        return 1;
+    }
+    printf("  swpjrnl: write/read/exists/clear round-trip ok\n");
+    return 0;
+}
+
 int persistence_boundary_run_tests()
 {
     static const int64_t balances[] = {700, 701, 713, 714, 715, 1000, 1176};
@@ -247,10 +289,14 @@ int persistence_boundary_run_tests()
            all_ok ? "PASS" : "FAIL");
 
     int hexc_fails = hexc_parse_test();
+    int swpj_fails = swap_journal_test();
+    printf("[%s] swap journal: write-ahead round-trip\n",
+           swpj_fails == 0 ? "PASS" : "FAIL");
     printf("[%s] hex-c: non-canonical C deserializes (processing-stage failure)\n",
            hexc_fails == 0 ? "PASS" : "FAIL");
 
-    return (roundtrip_ok && bound_ok && diet_ok && all_ok && hexc_fails == 0) ? 0 : 1;
+    return (roundtrip_ok && bound_ok && diet_ok && all_ok && hexc_fails == 0
+            && swpj_fails == 0) ? 0 : 1;
 }
 
 } // namespace cashu
