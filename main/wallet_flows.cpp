@@ -458,7 +458,18 @@ bool Wallet::receive(const Token& token, std::vector<Proof>& proofs_out)
     char amt[48];
     format_amount(amt, sizeof(amt), got, unit.c_str());
     ESP_LOGI(TAG, "received %s (%d proofs)", amt, (int)proofs_out.size());
-    save_proofs();
+    if (!save_proofs()) {
+        /* nucula#45: the proofs exist but CANNOT be persisted (e.g. the
+         * 32 KiB fail-stop bound). Acking would be a money-loss lie —
+         * the payment would revert on reboot. Surface it as a service
+         * failure so the gate answers service-unavailable instead of
+         * Payment OK. The journal stays armed: boot recovery re-claims
+         * the swap if the bound is ever lifted (H4/H6). */
+        ESP_LOGE(TAG, "receive: proofs not persistable — REFUSING the ack");
+        last_error_ = MintError{507, -3,
+            "wallet cannot persist proofs (blob bound) — payment refused"};
+        return false;
+    }
     journal_swap_clear();     // proofs durable — the write-ahead retires
     return true;
 }
@@ -956,7 +967,14 @@ bool Wallet::recover_swap_journal()
     }
 
     int64_t got = adopt_proofs(proofs);
-    save_proofs();
+    if (!save_proofs()) {
+        /* nucula#45: recovered but not persistable — KEEP the journal so
+         * the next boot retries (RAM resets, so re-adopting is safe
+         * across boots; within this boot we are done). */
+        ESP_LOGE(TAG, "recovered %lld sats but cannot persist — journal kept",
+                 (long long)got);
+        return false;
+    }
     journal_swap_clear();
     ESP_LOGW(TAG, "RECOVERED %lld sats from journaled swap (%d proofs)",
              (long long)got, (int)proofs.size());
