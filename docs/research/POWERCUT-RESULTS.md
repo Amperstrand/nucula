@@ -62,11 +62,15 @@ banked a leftover journal from the previous cut on the next receive.
 
 Recovery lanes (both bench-measured against our cdk 0.17.2 mint):
 - **Fast**: byte-identical swap re-POST → replay cache returns the
-  original signatures. Cache TTL is 60–120 s (t+0 cached; t+90/120
-  spent) — covers any normal reboot (~25–30 s).
+  original signatures. Cache TTL is **< 60 s** (t+0 cached; t+60, t+90,
+  t+120, t+180, t+300 all evicted — full probe, 2026-10-28; an earlier
+  "60–120 s" reading from shorter probes was wrong). Whether a normal
+  ~25–30 s reboot still fits depends on the exact TTL inside (0, 60) —
+  which is why the slow lane exists as the guarantee rather than the
+  footnote.
 - **Slow**: NUT-09 `/v1/restore` with the re-derived outputs — works
-  after the cache evicts (measured at t+120 s) — covers hang-class
-  recovery windows (issue #24) and beyond.
+  after the cache evicts (measured at t+120 s) — covers slow reboots,
+  hang-class recovery windows (issue #24), and beyond, unbounded.
 
 ## Methods note: the 32 KiB contamination (nucula issue #45)
 
