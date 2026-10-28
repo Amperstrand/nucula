@@ -175,7 +175,7 @@ def wait_boot(con, settle=18):
     return None, saw_boot
 
 
-def run_cut(con, offset_ms):
+def run_cut(con, offset_ms, rep=0):
     tok = mint_token()
     secrets, amount = token_secrets(tok)
     ensure_phone()
@@ -211,11 +211,17 @@ def run_cut(con, offset_ms):
         phase = "pre-swap"
     else:
         phase = "pre-post"
-    return {
+    row = {
         "offset_ms": offset_ms, "phase": phase, "amount": amount,
         "mint_state": state, "boot_balance": bal, "degraded": degraded,
         "hang": bal is None,
     }
+    os.makedirs("/root/.hermes/cache/scratch/powercut-consoles",
+                exist_ok=True)
+    with open(f"/root/.hermes/cache/scratch/powercut-consoles/"
+              f"cut-{offset_ms}-{rep}.log", "w") as f:
+        f.write(log)
+    return row
 
 
 def main():
@@ -243,7 +249,7 @@ def main():
         prev_bal = bal0
         for off in offsets:
             for rep in range(args.reps):
-                r = run_cut(con, off)
+                r = run_cut(con, off, rep)
                 lost = (r["mint_state"] == "SPENT"
                         and r["boot_balance"] is not None
                         and r["boot_balance"] - (prev_bal or 0) < r["amount"])

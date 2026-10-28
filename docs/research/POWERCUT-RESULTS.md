@@ -49,3 +49,31 @@ fix: pass = zero LOST rows at every offset.
 Raw data: `powercut-sweep{1,2,3}.csv` alongside this doc (38 measured
 cuts; sweeps 1–2 were cut short by the board-hang side effect and
 resumed); harness is deterministic and re-runnable.
+
+
+## H1 verdict (2026-10-28): the loss window is CLOSED
+
+With the write-ahead journal + deterministic seed + two-lane recovery
+live on hardware, the identical sweep (`powercut-sweep7.csv`, wallet
+fresh/sub-32KB): **20/20 cuts recovered — zero LOST rows, zero hangs.**
+Balance climbed 21 → 441 sats, exactly +21 per payment across the whole
+former loss zone (800–1700 ms). One row shows +42: the lazy retry
+banked a leftover journal from the previous cut on the next receive.
+
+Recovery lanes (both bench-measured against our cdk 0.17.2 mint):
+- **Fast**: byte-identical swap re-POST → replay cache returns the
+  original signatures. Cache TTL is 60–120 s (t+0 cached; t+90/120
+  spent) — covers any normal reboot (~25–30 s).
+- **Slow**: NUT-09 `/v1/restore` with the re-derived outputs — works
+  after the cache evicts (measured at t+120 s) — covers hang-class
+  recovery windows (issue #24) and beyond.
+
+## Methods note: the 32 KiB contamination (nucula issue #45)
+
+Sweeps 5/6 initially showed "recovered then regressing" balances — root
+cause was NOT the journal: the wallet had crossed the #15 fail-stop
+blob bound (33080 B > 32768 B at ~1113 sats), so every save past it was
+RAM-ONLY and reboots reverted to the last saveable state. The gateway
+acked those payments — its own hazard, filed as nucula #45 (refuse
+receives when RAM-ONLY; structural fixes are H4/H6). All sweep-5/6
+in-window "losses" disappear once the wallet is under the bound.

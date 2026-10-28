@@ -907,14 +907,45 @@ bool Wallet::recover_swap_journal()
     SwapResponse resp;
     if (!mint_post("swap-recovery", mint_url_ + "/v1/swap", body.c_str(),
                    resp, &last_error_)) {
-        if (last_error_.status != 0) {
+        if (last_error_.status == 0) {
+            ESP_LOGW(TAG, "mint unreachable — journal kept for retry");
+            return false;
+        }
+        if (last_error_.code == 11001) {
+            // inputs already spent and the replay cache evicted (TTL is
+            // 60-120 s on our cdk 0.17.2 mint — bench-measured): the
+            // slow lane is NUT-09 restore, which re-signs the SAME
+            // blinded outputs we re-derived from the journal (bench:
+            // restore returns the signatures after the cache is gone).
+            ESP_LOGW(TAG, "replay evicted (11001) — trying NUT-09 restore");
+            cJSON* rj = cJSON_CreateObject();
+            cJSON* outs = cJSON_CreateArray();
+            for (const auto& o : blinding.outputs)
+                cJSON_AddItemToArray(outs, to_json(o));
+            cJSON_AddItemToObject(rj, "outputs", outs);
+            char* rb = cJSON_PrintUnformatted(rj);
+            cJSON_Delete(rj);
+            if (!rb) { journal_swap_clear(); return false; }
+            bool ok = mint_post("restore", mint_url_ + "/v1/restore",
+                                rb, resp, &last_error_);
+            cJSON_free(rb);
+            if (!ok) {
+                if (last_error_.status != 0) {
+                    ESP_LOGE(TAG, "restore rejected (code %d) — clearing",
+                             last_error_.code);
+                    journal_swap_clear();
+                } else {
+                    ESP_LOGW(TAG, "restore unreachable — journal kept");
+                }
+                return false;
+            }
+            ESP_LOGW(TAG, "restore answered — unblinding slow-lane proofs");
+        } else {
             ESP_LOGE(TAG, "recovery rejected (code %d) — clearing",
                      last_error_.code);
             journal_swap_clear();
-        } else {
-            ESP_LOGW(TAG, "mint unreachable — journal kept for retry");
+            return false;
         }
-        return false;
     }
 
     std::vector<Proof> proofs;
