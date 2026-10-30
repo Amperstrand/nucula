@@ -5,6 +5,7 @@
 #include "cashu_json.hpp"
 #include "wallet_blob.hpp"
 #include "wallet_delta.hpp"
+#include "hex.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -266,17 +267,36 @@ bool Wallet::load_proofs()
     g_wallet_nvs_stat.loaded_proofs = (int)loaded.size();
     proofs_ = std::move(loaded);
 
-    // H4: replay the delta journal on top of the checkpoint. Records
-    // are disjoint receives; dedupe by secret guards against a replay
-    // racing a half-compacted ring (belt-and-braces with the seq chain).
+    // H4: replay the delta journal on top of the checkpoint. ADD
+    // records are receives; REMOVE records retire inputs a
+    // consolidation swap spent (dedupe by secret guards against a
+    // replay racing a half-compacted ring — belt-and-braces with the
+    // seq chain).
     {
         int live = 0;
-        int adopted = 0;
-        for (const std::string& rec : delta_journal().replay(live)) {
+        int adopted = 0, retired = 0;
+        for (const nucula::DeltaRec& rec : delta_journal().replay(live)) {
+            if (rec.op == nucula::DeltaOp::Remove) {
+                // payload = packed 32-byte raw secrets of spent inputs
+                if (rec.payload.size() % 32 != 0) {
+                    ESP_LOGE(TAG, "delta REMOVE record malformed (%u B) — dropped",
+                             (unsigned)rec.payload.size());
+                    continue;
+                }
+                for (size_t off = 0; off + 32 <= rec.payload.size(); off += 32) {
+                    char hex[65];
+                    bytes_to_hex(reinterpret_cast<const unsigned char*>(rec.payload.data()) + off,
+                                 32, hex);
+                    auto it = std::remove_if(proofs_.begin(), proofs_.end(),
+                                             [&](const Proof& p) { return p.secret == hex; });
+                    if (it != proofs_.end()) { proofs_.erase(it, proofs_.end()); ++retired; }
+                }
+                continue;
+            }
             std::vector<Proof> add;
-            if (!cashu::proofs_from_blob(rec.data(), rec.size(), add)) {
+            if (!cashu::proofs_from_blob(rec.payload.data(), rec.payload.size(), add)) {
                 ESP_LOGE(TAG, "delta record undecodable (%u B) — dropped",
-                         (unsigned)rec.size());
+                         (unsigned)rec.payload.size());
                 continue;
             }
             for (Proof& p : add) {
@@ -286,8 +306,8 @@ bool Wallet::load_proofs()
                 if (!have) { proofs_.push_back(std::move(p)); ++adopted; }
             }
         }
-        ESP_LOGW(TAG, "[%d] loaded %d proofs from NVS (+%d delta, ring live=%d)",
-                 nvs_slot_, (int)proofs_.size(), adopted, live);
+        ESP_LOGW(TAG, "[%d] loaded %d proofs from NVS (+%d/-%d delta, ring live=%d)",
+                 nvs_slot_, (int)proofs_.size(), adopted, retired, live);
 
         // Compaction policy: past half the ring, fold into the
         // checkpoint and clear (failure keeps the ring — safe, retry).
@@ -660,6 +680,22 @@ bool Wallet::drain_pending_tokens(int& accepted, int& failed)
     ESP_LOGI(TAG, "pending: drain slot %d -> %d ok, %d retained, %d dropped",
              nvs_slot_, accepted, (int)retained.size(), failed);
     return true;
+}
+
+} // namespace cashu
+
+// H6 accessors (see wallet.hpp): flows persist consolidation retirements
+// through the delta ring without reaching into this file's statics.
+namespace cashu {
+
+bool Wallet::delta_append_remove_bytes(const std::string& raw32_secrets)
+{
+    return delta_journal().append_remove(raw32_secrets);
+}
+
+int Wallet::delta_live_records()
+{
+    return delta_journal().live();
 }
 
 } // namespace cashu

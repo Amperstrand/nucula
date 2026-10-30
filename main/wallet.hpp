@@ -94,6 +94,18 @@ public:
               std::vector<Proof>& new_proofs,
               std::vector<Proof>& change);
 
+    // H6 (nucula #46): bounded wallet via consolidation swap. Retires
+    // the smallest proofs for a few large ones when the proof set
+    // crosses the persistence caps; returns how many proofs were
+    // retired. false + last_mint_error() explains any refusal (code 0
+    // detail "not needed" = benign no-op). Persists ADD(outputs) then
+    // REMOVE(inputs) through the H4 delta ring — value-safe order.
+    bool consolidate(int& retired_count);
+
+    // Delta-journal accessors for flows (defined in wallet_nvs.cpp).
+    static bool delta_append_remove_bytes(const std::string& raw32_secrets);
+    static int  delta_live_records();
+
     bool receive(const Token& token, std::vector<Proof>& proofs_out);
 
     // Offline-receive queue: tokens stashed when WiFi is down and drained on

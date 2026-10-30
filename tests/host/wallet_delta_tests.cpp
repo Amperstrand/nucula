@@ -50,8 +50,8 @@ int run_delta_tests(int& failures)
         auto recs = dj.replay(live);
         CHECK(live == 3);
         CHECK(recs.size() == 3);
-        CHECK(recs[0] == frag('a', 40));
-        CHECK(recs[2] == frag('c', 60));
+        CHECK(recs[0].op == nucula::DeltaOp::Add && recs[0].payload == frag('a', 40));
+        CHECK(recs[2].op == nucula::DeltaOp::Add && recs[2].payload == frag('c', 60));
     }
     // 2. torn tail: truncate the newest record's value -> replay drops it,
     //    keeps older records (the pre-tear state was acked, the torn one wasn't)
@@ -69,7 +69,7 @@ int run_delta_tests(int& failures)
         int live = -1;
         auto recs = dj.replay(live);
         CHECK(live == 1);
-        CHECK(recs.size() == 1 && recs[0] == frag('a', 40));
+        CHECK(recs.size() == 1 && recs[0].payload == frag('a', 40));
     }
     // 3. seq gap (crash mid-clear): old records 1..2 + new records 5..6 —
     //    only the 5..6 chain replays (the 1..2 are in the checkpoint)
@@ -99,7 +99,7 @@ int run_delta_tests(int& failures)
         auto recs2 = dj2.replay(live);
         // the surviving old record (if any) has seq 2; new ones 3,4 — chain intact
         CHECK(live >= 2);
-        CHECK(recs2.back() == frag('y', 30));
+        CHECK(recs2.back().payload == frag('y', 30));
     }
     // 4. ring-full: fill all slots, next append refuses (err 2)
     {
@@ -129,7 +129,45 @@ int run_delta_tests(int& failures)
         CHECK(dj.append(frag('c', 10)));
         int live = -1;
         auto recs = dj.replay(live);
-        CHECK(live == 1 && recs[0] == frag('c', 10));
+        CHECK(live == 1 && recs[0].op == nucula::DeltaOp::Add && recs[0].payload == frag('c', 10));
+    }
+
+    // 7. H6 REMOVE records: mixed Add/Remove replay in seq order, ops intact
+    {
+        std::map<std::string,std::string> m;
+        DeltaJournal dj(map_kv(m));
+        CHECK(dj.append(frag('a', 40)));                 // seq 1 Add
+        std::string rm(3 * 32, '\x11');                  // 3 packed secrets
+        CHECK(dj.append_remove(rm));                      // seq 2 Remove
+        CHECK(dj.append(frag('b', 50)));                 // seq 3 Add
+        int live = -1;
+        auto recs = dj.replay(live);
+        CHECK(live == 3 && recs.size() == 3);
+        CHECK(recs[0].op == nucula::DeltaOp::Add && recs[0].payload == frag('a', 40));
+        CHECK(recs[1].op == nucula::DeltaOp::Remove && recs[1].payload == rm);
+        CHECK(recs[2].op == nucula::DeltaOp::Add && recs[2].payload == frag('b', 50));
+    }
+    // 8. REMOVE payload validation: non-multiple-of-32 rejected
+    {
+        std::map<std::string,std::string> m;
+        DeltaJournal dj(map_kv(m));
+        CHECK(!dj.append_remove(std::string(31, 'x')));
+        CHECK(dj.last_error() == 1);
+        CHECK(dj.live() == 0);
+    }
+    // 9. torn tail in a mixed ring: only the contiguous chain replays
+    {
+        std::map<std::string,std::string> m;
+        DeltaJournal dj(map_kv(m));
+        CHECK(dj.append(frag('a', 40)));
+        CHECK(dj.append_remove(std::string(32, '\x22')));
+        // truncate the newest (REMOVE) record
+        std::string k = "d001";
+        m[k] = m[k].substr(0, m[k].size() - 3);
+        int live = -1;
+        auto recs = dj.replay(live);
+        CHECK(live == 1 && recs.size() == 1);
+        CHECK(recs[0].op == nucula::DeltaOp::Add);
     }
     return failures;
 }

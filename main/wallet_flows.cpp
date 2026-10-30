@@ -1,5 +1,7 @@
 #include "wallet.hpp"
 #include "wallet_internal.hpp"
+#include "wallet_consolidate.hpp"
+#include "wallet_delta.hpp"
 #include "cashu_json.hpp"
 #include "crypto.h"
 #include "keyset.hpp"
@@ -401,6 +403,89 @@ bool Wallet::swap(std::vector<Proof>& inputs, int amount,
              (int)inputs.size(), (int)new_proofs.size(),
              (int)change.size(), fee);
 
+    return true;
+}
+
+// -------------------------------------------------------------------------
+// H6: Consolidation swap — bounded wallet by construction (nucula #46)
+// -------------------------------------------------------------------------
+
+bool Wallet::consolidate(int& retired_count)
+{
+    last_error_ = {};
+    retired_count = 0;
+    recover_swap_journal();   // a pending write-ahead outranks new work
+    if (degraded_) {
+        last_error_ = MintError{0, -1, "wallet is DEGRADED (proof load was skipped at boot) - reboot to recover; persisted proofs are protected"};
+        return false;
+    }
+
+    // Policy view of the live proof set (NPB1 per-proof estimate from
+    // the bench: 33080 B / 117 proofs ~= 283 B incl. C + secret).
+    std::vector<int64_t> amounts;
+    amounts.reserve(proofs_.size());
+    for (const Proof& p : proofs_) amounts.push_back(p.amount);
+    size_t blob_est = proofs_.size() * 283;
+
+    if (!nucula::ConsolidationPolicy::should_consolidate(proofs_.size(), blob_est)) {
+        last_error_ = MintError{0, 0, "consolidation not needed"};
+        return false;
+    }
+    std::vector<size_t> sel = nucula::ConsolidationPolicy::select_smallest(amounts);
+    if (sel.empty()) {
+        last_error_ = MintError{0, 0, "too few proofs to be worth a swap"};
+        return false;
+    }
+
+    std::vector<Proof> inputs;
+    inputs.reserve(sel.size());
+    for (size_t i : sel) inputs.push_back(proofs_[i]);
+    const int64_t value_before = proofs_sum(inputs);
+
+    // Full-return swap: deterministic outputs + H1 write-ahead journal
+    // inside (transport ambiguity keeps the journal; recovery re-POSTs
+    // or restores — both lanes proven on the bench).
+    std::vector<Proof> new_proofs, change;
+    if (!swap(inputs, -1, new_proofs, change)) return false;
+
+    // Mint executed: apply to RAM — drop retired inputs, adopt outputs.
+    for (const Proof& in : inputs) {
+        auto it = std::remove_if(proofs_.begin(), proofs_.end(),
+                                 [&](const Proof& p) { return p.secret == in.secret; });
+        proofs_.erase(it, proofs_.end());
+    }
+    proofs_.insert(proofs_.end(), new_proofs.begin(), new_proofs.end());
+    proofs_.insert(proofs_.end(), change.begin(), change.end());
+
+    // Persist in value-safe order: ADD(outputs) first — a crash between
+    // the two records shows spendable extra proofs on replay, never
+    // missing value; REMOVE(inputs) second; then opportunistic
+    // compaction folds the ring into a now-smaller checkpoint.
+    std::vector<Proof> outs = new_proofs;
+    outs.insert(outs.end(), change.begin(), change.end());
+    if (!save_proofs(&outs)) {
+        // #45 discipline: refuse rather than ack unpersistable state.
+        // The value exists at the mint and the swap journal is already
+        // cleared by swap(); boot recovery of the delta ring redoes the
+        // retirement from the H1 journal if needed.
+        last_error_ = MintError{507, -3, "consolidated outputs not persistable"};
+        return false;
+    }
+    std::string rm;
+    rm.reserve(inputs.size() * 32);
+    for (const Proof& in : inputs) {
+        unsigned char raw[32];
+        if (hex_to_bytes(in.secret.c_str(), raw, sizeof(raw)) == (int)sizeof(raw))
+            rm.append(reinterpret_cast<const char*>(raw), sizeof(raw));
+    }
+    if (!rm.empty()) delta_append_remove_bytes(rm);
+    if (delta_live_records() > nucula::DeltaJournal::COMPACT_AT)
+        save_proofs();   // full checkpoint + ring clear (best effort)
+
+    retired_count = (int)inputs.size();
+    ESP_LOGW(TAG, "consolidated: %d proofs -> %d (+%d change), %lld sats preserved, wallet now %d proofs",
+             retired_count, (int)new_proofs.size(), (int)change.size(),
+             (long long)value_before, (int)proofs_.size());
     return true;
 }
 
