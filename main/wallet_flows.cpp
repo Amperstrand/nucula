@@ -458,7 +458,7 @@ bool Wallet::receive(const Token& token, std::vector<Proof>& proofs_out)
     char amt[48];
     format_amount(amt, sizeof(amt), got, unit.c_str());
     ESP_LOGI(TAG, "received %s (%d proofs)", amt, (int)proofs_out.size());
-    if (!save_proofs()) {
+    if (!save_proofs(&proofs_out)) {
         /* nucula#45: the proofs exist but CANNOT be persisted (e.g. the
          * 32 KiB fail-stop bound). Acking would be a money-loss lie —
          * the payment would revert on reboot. Surface it as a service
@@ -681,7 +681,7 @@ bool Wallet::mint_tokens(const MintQuote& quote, int amount)
     char amt[48];
     format_amount(amt, sizeof(amt), got, unit.c_str());
     ESP_LOGI(TAG, "minted %s (%d proofs)", amt, (int)new_proofs.size());
-    save_proofs();
+    save_proofs(&new_proofs);
     return true;
 }
 
@@ -967,7 +967,7 @@ bool Wallet::recover_swap_journal()
     }
 
     int64_t got = adopt_proofs(proofs);
-    if (!save_proofs()) {
+    if (!save_proofs(&proofs)) {
         /* nucula#45: recovered but not persistable — KEEP the journal so
          * the next boot retries (RAM resets, so re-adopting is safe
          * across boots; within this boot we are done). */

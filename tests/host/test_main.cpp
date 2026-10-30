@@ -25,6 +25,7 @@
 
 namespace cashu {
 extern int fresh_wallet_run_tests(); // tests/host/fresh_wallet_tests.cpp
+extern int run_delta_tests(int&); // tests/host/wallet_delta_tests.cpp
 
 bool Wallet::load_keysets()
 {
@@ -105,6 +106,7 @@ int main()
     run("wallet logic (fees/selection/units)", cashu::Wallet::run_tests());
     run("persistence boundary (issue #15)", cashu::persistence_boundary_run_tests() == 0);
     run("fresh wallet boot (not degraded)", cashu::fresh_wallet_run_tests() == 0);
+    { int f = 0; cashu::run_delta_tests(f); run("delta journal engine (H4)", f == 0); }
 
     secp256k1_context_destroy(ctx);
     printf("\n%s (%d suite(s) failed)\n", g_failed ? "FAILED" : "ALL PASS", g_failed);

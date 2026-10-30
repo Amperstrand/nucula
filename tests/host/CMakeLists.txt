@@ -49,6 +49,7 @@ add_executable(nucula_host_tests
     test_main.cpp
     nvs_shim.cpp
     persistence_boundary_tests.cpp
+    wallet_delta_tests.cpp
     fresh_wallet_tests.cpp
     ${TINYCBOR_SRC}
     ${MBEDTLS_SRC}
@@ -67,6 +68,7 @@ add_executable(nucula_host_tests
     ${MAIN_DIR}/wallet.cpp
     ${MAIN_DIR}/wallet_nvs.cpp
     ${MAIN_DIR}/wallet_journal.cpp
+    ${MAIN_DIR}/wallet_delta.cpp
     ${MAIN_DIR}/wallet_blob.cpp
     ${MAIN_DIR}/wallet_blind.cpp
     ${MAIN_DIR}/wallet_identity.cpp

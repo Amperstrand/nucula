@@ -4,6 +4,7 @@
 #include "wallet_wstat.h"
 #include "cashu_json.hpp"
 #include "wallet_blob.hpp"
+#include "wallet_delta.hpp"
 
 #include <algorithm>
 #include <cstdio>
@@ -83,7 +84,37 @@ bool Wallet::erase_nvs()
 
 extern "C" wallet_nvs_stat_t g_wallet_nvs_stat = {};
 
-bool Wallet::save_proofs()
+// H4 delta journal bound to the wallet NVS namespace (nucula #46).
+// One small key write per receive; the full checkpoint is rewritten
+// only at compaction (live > COMPACT_AT) or on fallback.
+static nucula::DeltaKV make_delta_kv()
+{
+    return nucula::DeltaKV{
+        [](const std::string& k, std::string& v) {
+            Nvs nvs(NVS_READONLY);
+            return nvs.ok() && nvs.get_blob(k.c_str(), v);
+        },
+        [](const std::string& k, const std::string& v) {
+            Nvs nvs(NVS_READWRITE);
+            if (!nvs.ok()) return false;
+            esp_err_t err = nvs_set_blob(nvs.get(), k.c_str(), v.data(), v.size());
+            return err == ESP_OK && nvs_commit(nvs.get()) == ESP_OK;
+        },
+        [](const std::string& k) {
+            Nvs nvs(NVS_READWRITE);
+            if (!nvs.ok()) return false;
+            return nvs_erase_key(nvs.get(), k.c_str()) == ESP_OK;
+        },
+    };
+}
+
+static nucula::DeltaJournal& delta_journal()
+{
+    static nucula::DeltaJournal dj(make_delta_kv());
+    return dj;
+}
+
+bool Wallet::save_proofs(const std::vector<Proof>* adds)
 {
     if (degraded_) {
         ESP_LOGE(TAG, "save_proofs refused: wallet is DEGRADED (proof load was skipped — saving would overwrite persisted state)");
@@ -92,6 +123,30 @@ bool Wallet::save_proofs()
         g_wallet_nvs_stat.last_err = -3;
         return false;
     }
+
+    // H4 fast path: persist only the new proofs as one bounded delta
+    // record. Falls back to the full-checkpoint path below on
+    // ring-full / record-too-big / write failure (fallback compacts).
+    if (adds && !adds->empty()) {
+        size_t frag_len = 0;
+        char* frag = cashu::proofs_to_bin_buf(*adds, &frag_len);
+        if (frag) {
+            std::string frag_s(frag, frag_len);
+            free(frag);
+            if (delta_journal().append(frag_s)) {
+                g_wallet_nvs_stat.saves++;
+                g_wallet_nvs_stat.last_save_ok = true;
+                g_wallet_nvs_stat.last_err = 0;
+                g_wallet_nvs_stat.last_blob = frag_len;
+                ESP_LOGI(TAG, "delta append ok (%u B, live=%d)",
+                         (unsigned)frag_len, delta_journal().live());
+                return true;
+            }
+            ESP_LOGW(TAG, "delta append failed (err %d) — falling back to full checkpoint",
+                     delta_journal().last_error());
+        }
+    }
+
     // Fail-stop bound (PERSISTENCE-DESIGN discipline): refuse to run on
     // state that could never persist, loudly, instead of silently
     // degrading to a RAM-only wallet — the nucula#1 bug class.
@@ -150,7 +205,10 @@ bool Wallet::save_proofs()
     g_wallet_nvs_stat.saves++;
     g_wallet_nvs_stat.last_save_ok = true;
     g_wallet_nvs_stat.last_err = 0;
-    ESP_LOGW(TAG, "[%d] saved %d proofs (%u bytes)",
+    // Full checkpoint wrote: the ring's contents are now subsumed —
+    // compact it away (failure is harmless; next compaction retries).
+    delta_journal().clear();
+    ESP_LOGW(TAG, "[%d] saved %d proofs (%u bytes, ring compacted)",
              nvs_slot_, (int)proofs_.size(), (unsigned)blob_len);
     return true;
 }
@@ -207,7 +265,37 @@ bool Wallet::load_proofs()
 
     g_wallet_nvs_stat.loaded_proofs = (int)loaded.size();
     proofs_ = std::move(loaded);
-    ESP_LOGW(TAG, "[%d] loaded %d proofs from NVS", nvs_slot_, (int)proofs_.size());
+
+    // H4: replay the delta journal on top of the checkpoint. Records
+    // are disjoint receives; dedupe by secret guards against a replay
+    // racing a half-compacted ring (belt-and-braces with the seq chain).
+    {
+        int live = 0;
+        int adopted = 0;
+        for (const std::string& rec : delta_journal().replay(live)) {
+            std::vector<Proof> add;
+            if (!cashu::proofs_from_blob(rec.data(), rec.size(), add)) {
+                ESP_LOGE(TAG, "delta record undecodable (%u B) — dropped",
+                         (unsigned)rec.size());
+                continue;
+            }
+            for (Proof& p : add) {
+                bool have = false;
+                for (const Proof& e : proofs_)
+                    if (e.secret == p.secret) { have = true; break; }
+                if (!have) { proofs_.push_back(std::move(p)); ++adopted; }
+            }
+        }
+        ESP_LOGW(TAG, "[%d] loaded %d proofs from NVS (+%d delta, ring live=%d)",
+                 nvs_slot_, (int)proofs_.size(), adopted, live);
+
+        // Compaction policy: past half the ring, fold into the
+        // checkpoint and clear (failure keeps the ring — safe, retry).
+        if (live > nucula::DeltaJournal::COMPACT_AT && save_proofs()) {
+            ESP_LOGI(TAG, "delta ring compacted into checkpoint (%d proofs)",
+                     (int)proofs_.size());
+        }
+    }
     return true;
 }
 

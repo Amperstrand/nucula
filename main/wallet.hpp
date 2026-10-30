@@ -201,7 +201,10 @@ private:
     secp256k1_context* ctx_;
     int nvs_slot_;
 
-    bool save_proofs();
+    // H4: with `adds`, persist only the new proofs as a delta-journal
+    // record (bounded per-record write); without, rewrite the full
+    // checkpoint (compaction / fallback path).
+    bool save_proofs(const std::vector<Proof>* adds = nullptr);
     bool load_proofs();
     bool save_keysets();
     bool load_keysets_nvs();
