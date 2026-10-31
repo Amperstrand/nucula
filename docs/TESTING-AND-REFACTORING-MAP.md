@@ -57,3 +57,16 @@ pyserial-pulse recovery) · ACR CE one-write/one-power-cycle · Ultralight
 CE 52-byte ceiling · esptool default-port trap (flashed the CYD silently)
 · esp32c3 root-sdkconfig trap · `git add -A` in a repo with runtime
 artifacts (cost: soak JSONLs, recovered from reflog).
+
+## Crash forensics: the coredump partition (2026-10-31)
+
+`partitions.csv` now carries `coredump @ 0x3F0000, 0x10000` (ends exactly
+at the 4 MB cap; NVS/phy/factory rows frozen byte-identical), and all
+four sdkconfig defaults enable `CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH` +
+ELF format — the #494 audit's highest-value single item (a money device
+had zero crash forensics). A panic now writes an ELF core to flash;
+retrieve with `idf.py coredump-info` (or `espcoredump.py` over serial)
+BEFORE the next reflash — a new flash erases the region unless preserved.
+A missing/blank partition at boot is non-fatal (espcoredump disables
+itself). Deployed at the next bench reflash (table change); the free
+span 0x200000–0x3F0000 stays reserved for the audit's dual-bank item.
