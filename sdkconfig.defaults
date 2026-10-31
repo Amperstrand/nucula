@@ -54,3 +54,13 @@ CONFIG_ESP_TLS_CLIENT_SESSION_TICKETS=y
 
 # Native USB console avoids UART0 RX on GPIO20 (keyboard INT_N on v2).
 CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+
+# Crash forensics (ccid-firmware-rs #494 audit adoption — the audit's
+# highest-value single item: a money device with zero crash forensics):
+# dump panics to the `coredump` partition in partitions.csv (ELF format,
+# explicit — the Kconfig choice defaults to NONE). A missing/blank
+# coredump partition at boot is non-fatal (espcoredump logs and disables
+# itself); retrieval: idf.py coredump-info / espcoredump.py over serial.
+# Deployed at the next bench reflash (table change).
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_ESP_COREDUMP_DATA_FORMAT_ELF=y

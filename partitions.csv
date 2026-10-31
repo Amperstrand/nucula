@@ -2,3 +2,4 @@
 nvs,      data, nvs,     0x9000,  0x26000,
 phy_init, data, phy,     0x2f000, 0x1000,
 factory,  app,  factory, 0x30000, 0x1D0000,
+coredump, data, coredump, 0x3F0000, 0x10000,
