@@ -54,6 +54,48 @@ struct Soak {
     reboot_checks: u32,
 }
 
+/// Owner taxonomy for cycle failures (ccid-firmware-rs #444 lineage, the
+/// nucula mapping from the 2026-11-12 cross-project audit): bridge =
+/// Hades2001 console/serial transport (chunk drops, console never
+/// reappearing), device = the wallet/NVS side answered but is wrong
+/// (non-persistent balance, invariant break, unreadable output after the
+/// transport DID answer), other = triage bucket, never silently dropped.
+/// Tagged on every fail event so cross-run triage needs no post-hoc
+/// error-string grepping.
+fn classify_error(err: &str) -> &'static str {
+    let e = err.to_ascii_lowercase();
+    if e.contains("failed 3x") || e.contains("console never came back") || e.contains("port") {
+        "bridge"
+    } else if e.contains("balance") || e.contains("receive did not complete") {
+        "device"
+    } else {
+        "other"
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::classify_error;
+
+    #[test]
+    fn bridge_class() {
+        assert_eq!(classify_error("cmd \"balance\" failed 3x: timeout"), "bridge");
+        assert_eq!(classify_error("console never came back"), "bridge");
+    }
+
+    #[test]
+    fn device_class() {
+        assert_eq!(classify_error("balance not persistent: 5 != 21"), "device");
+        assert_eq!(classify_error("balance 30 != 21+9"), "device");
+        assert_eq!(classify_error("receive did not complete: mint timeout"), "device");
+    }
+
+    #[test]
+    fn other_is_never_silent() {
+        assert_eq!(classify_error("something new"), "other");
+    }
+}
+
 impl Soak {
     fn event(&mut self, kind: &str, fields: &[(&str, String)]) {
         let mut line = format!(
@@ -227,7 +269,11 @@ async fn main() {
                 soak.consecutive += 1;
                 soak.event(
                     "fail",
-                    &[("amount", amount.to_string()), ("error", err.clone())],
+                    &[
+                        ("amount", amount.to_string()),
+                        ("error", err.clone()),
+                        ("class", classify_error(&err).to_string()),
+                    ],
                 );
                 if soak.consecutive >= MAX_CONSECUTIVE_FAILURES {
                     soak.event("abort", &[("reason", "consecutive failures".into())]);
