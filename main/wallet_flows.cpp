@@ -612,6 +612,16 @@ bool Wallet::check_mint_quote(const std::string& quote_id,
 bool Wallet::mint_tokens(const MintQuote& quote, int amount)
 {
     last_error_ = {};
+    // Degraded guard BEFORE any mint work (PR #13 review debt, the
+    // receive()-mirror): generating outputs and mint_post-ing consumes the
+    // PAID quote at the mint, and save_proofs() refuses while degraded —
+    // without this guard the command reports success while the issued
+    // proofs can never be persisted: ecash destroyed from the user's
+    // perspective after reboot. Reject before the POST, like receive().
+    if (degraded_) {
+        last_error_ = MintError{0, -1, "wallet is DEGRADED (proof load was skipped at boot) - reboot to recover; refusing to mint (a consumed quote's proofs could not be persisted)"};
+        return false;
+    }
     const std::string unit = quote.unit.empty() ? std::string("sat") : quote.unit;
     const std::string method = quote.method.empty() ? std::string("bolt11")
                                                     : quote.method;
